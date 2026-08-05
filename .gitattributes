@@ -1,0 +1,12 @@
+# Normalize to LF in the repository and in the working tree on every platform.
+# This plugin ships JS, JSON and Markdown consumed by the Copilot CLI on
+# macOS, Linux and Windows, so CRLF must never enter the object store.
+* text=auto eol=lf
+
+# Binary assets are never normalized.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

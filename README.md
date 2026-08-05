@@ -127,7 +127,7 @@ For scale: a single trivial agent turn runs into double-digit credits. A
 npm test
 ```
 
-Two suites, no dependencies:
+Four suites, no dependencies:
 
 - `tests/canvas.test.mjs` — manifest normalization, run projection, static HTML,
   and the client render driven through a DOM shim (`tests/dom-shim.mjs`).
@@ -135,10 +135,28 @@ Two suites, no dependencies:
   `plan-workflow` never instructs a run, that `execute-workflow` handles all
   four terminal statuses, and that neither skill re-acquires the "resume is
   free" claim disproved above.
+- `tests/examples.test.mjs` — every fixture in [`examples/`](examples/) normalizes
+  with zero errors and projects to the run state it claims.
+- `tests/harness.test.mjs` — executes each fixture's real `run` body against a
+  mock `ctx` and asserts the agents it spawns and the phases it announces
+  set-equal what its manifest declares.
 
 The skill tests exist because a skill is prose, and prose drifts. They caught a
 stale claim still sitting in a frontmatter description after the body had been
 corrected.
+
+The example suites exist because a manifest is a *claim* about a factory. They
+catch the inverse drift: a graph that is internally consistent and still does not
+describe the code that runs.
+
+## Examples
+
+[`examples/`](examples/) holds ten worked workflows derived from Anthropic's
+["A harness for every task"][harness] — six plan-time shapes and four execution
+scenarios, plus a 24-item coverage index. They double as the canvas's fidelity
+target. See [examples/README.md](examples/README.md).
+
+[harness]: https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code
 
 ## Layout
 
@@ -151,6 +169,10 @@ extensions/workflow-factory-canvas/
   renderer.mjs      HTML, CSS, and the browser client
 skills/plan-workflow/SKILL.md
 skills/execute-workflow/SKILL.md
+examples/
+  corpus.mjs        24 article-derived items, mapped to fixtures or marked out of scope
+  patterns/         6 plan-time fixtures
+  runs/             4 execution fixtures
 tests/
 ```
 

@@ -165,6 +165,22 @@ back to `plan-workflow`.
 The one thing worth doing in the foreground is *synthesis the user asked for*:
 turning the run's result into the answer, edit, or file they actually wanted.
 
+## What the states look like
+
+[`examples/runs/`](../../examples/runs/) holds four workflows with real run state
+projected onto them, so you can check a live graph against a known-good one
+before calling it broken:
+
+| Fixture | What it shows |
+| --- | --- |
+| `deep-verification.mjs` | a *conditional* node that correctly stays grey in a fully successful run |
+| `sorting.mjs` | phases as columns, each round narrowing |
+| `memory-and-rules.mjs` | five states live simultaneously, plus an undeclared agent as `unmapped` |
+| `triage-at-scale.mjs` | container groups, one deliberately spanning two phases |
+
+A permanently grey node is not automatically a bug. Conditional branches and
+terminal artifact nodes are *supposed* to stay `not-started`.
+
 ## Failure modes
 
 | Symptom | Cause |

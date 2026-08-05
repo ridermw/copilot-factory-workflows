@@ -6,6 +6,6 @@
   "description": "Plan multi-agent Agent Factory workflows, then execute them with a live workflow graph.",
   "license": "MIT",
   "scripts": {
-    "test": "node tests/canvas.test.mjs && node tests/skills.test.mjs"
+    "test": "node tests/canvas.test.mjs && node tests/skills.test.mjs && node tests/examples.test.mjs && node tests/harness.test.mjs"
   }
 }

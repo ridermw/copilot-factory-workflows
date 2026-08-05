@@ -9,7 +9,7 @@ numbers, cues and script always match what is on screen.
 Open the deck and press **N** for notes, or **S** for the presenter console, which
 shows both alongside a live preview and a timer.
 
-Spoken length: **3770 words** across 25 slides — about 20 minutes at a brisk
+Spoken length: **4159 words** across 27 slides — about 20 minutes at a brisk
 conversational pace.
 
 ---
@@ -118,13 +118,13 @@ Which of these have you built? Genuinely - has anyone got a Manual Loop they hav
 
 So let us take verification, because it is the easiest of the five to cut corners on and the one you can least afford to skip. The framing I like: the check is the thing that can say no. If nothing in your loop can say no, you do not have a loop, you have an expensive way to generate confidence.
 
-And here is the single most corroborated finding I came across building this, which is why the recommendation is not hedged.
+And here is the most corroborated finding I came across building this, which is why the recommendation is not hedged.
 
-Anthropic Labs: agents asked to evaluate their own work confidently praise it, even when the quality is obviously mediocre to a human. The field study, independently: the agent that wrote the code grades its own homework too softly. The qm harness, a completely different project, states it as an engineering rule - the context that produced a diff already believes it is correct, and that belief is the bias review exists to defeat. And ringer, a fourth project: an agent's own done is not evidence, exit codes are.
+Anthropic Labs: agents asked to evaluate their own work confidently praise it, even when the quality is obviously mediocre. The field study, independently: the agent that wrote the code grades its own homework too softly. The qm harness states it as an engineering rule - the context that produced a diff already believes it is correct, and that belief is the bias review exists to defeat. Ringer: an agent's own done is not evidence, exit codes are.
 
-And the Bun engineer, who had the most at stake of anyone here, puts it as a plain observation about incentives: the Claude that wrote the code wants the code to get accepted; the Claude that reviews wants to find issues in it. He notes it is the same reason we do not let humans review their own pull requests.
+And the Bun engineer, who had the most at stake here, puts it as an observation about incentives: the Claude that wrote the code wants it accepted; the Claude that reviews wants to find issues in it. Same reason we do not let humans review their own pull requests.
 
-Five unconnected sources, different domains, same result. That is about as close to settled as anything gets in this field right now.
+Five unconnected sources, same result. That is about as close to settled as anything gets right now.
 
 ---
 
@@ -262,7 +262,7 @@ That is the real argument for the adversarial reviewer. Not that it catches more
 
 ---
 
-## 20 · A loop is not better because it never asks: it is better when the questions are worth asking
+## 20 · A loop is not better because it never asks: it is better when the questions are
 
 **Your cue.** This answers the obvious objection - if the loop runs without me, when does it come back? Nate Jones' framing. Land the distinction: the bad question makes you the context store; the good question hands you a decision only you can make.
 
@@ -290,19 +290,37 @@ So the test is not does a loop need an evaluator. It is: does this task sit beyo
 
 ---
 
-## 22 · Where I think this goes: loops are one shape of a larger thing
+## 22 · A loop is one of six shapes a dynamic workflow takes
 
-**Your cue.** Label this as your framing, out loud. The sources do not make the superset claim - you do. This room respects that distinction and will notice if you blur it.
+**Your cue.** Show the catalogue, do not argue the taxonomy. Point at the bottom right. The six patterns are Anthropic's and are sourced; the claim that loops sit INSIDE workflows as a subset is yours - say which is which.
 
-Briefly, where I think this goes, and I want to flag clearly that this next bit is my framing, not something my sources claim.
+So where does this go next. Anthropic shipped dynamic workflows in Claude Code, where the model writes its own harness for the task in front of it, and they published a catalogue of six patterns it composes.
 
-I think loops are one shape of a larger thing. Dynamic workflows are the superset, and a subset of dynamic workflows are loops. Two pieces of evidence. The mature harnesses have stopped treating loop as the top-level concept - they separate workflow, loop, scheduler and organization as different axes: what the agents take on, how long they keep at it, when it happens, what persists. And the Bun rewrite was not one loop, it was about fifty dynamic workflows composed together, each of which was internally a loop.
+Classify and act - a classifier routes to different agents. Fan out and synthesize - split the work, one agent per piece, then a barrier merges them. Adversarial verification - a separate verifier per agent, which is the thing I have been recommending all talk. Generate and filter. Tournament, where agents compete and judges compare them pairwise, because comparative judgment is more reliable than absolute scoring.
 
-That also resolves the tension from the last slide. The five moves define the shape. What implements each move is what decays.
+And bottom right: loop until done. Spawn agents until a stop condition is met, rather than a fixed number of passes.
+
+That is the one this entire talk has been about. It is one of six. And the Bun rewrite from the first slide was not one loop either - it was about fifty of these composed together.
+
+So my reading, and I want to be clear this next bit is mine rather than theirs: loops are a subset of dynamic workflows. Anthropic says the patterns compose. I am saying the loop sits inside the larger thing. Take the six patterns as sourced and the containment as my argument.
 
 ---
 
-## 23 · The same five moves, on work this department already does
+## 23 · Plan and execute are separate steps, so you see the fan-out before it spends
+
+**Your cue.** This is ours, so say so. The point is not the tool - it is that the shape and the budget are visible before anything spawns. That is 'front-load the human hours' made into a product decision. Mention the two lessons that cost real credits if the room asks about cost.
+
+One more thing, and this one is ours.
+
+We built a plugin for Copilot CLI that does this - two skills and a canvas. The first skill, plan-workflow, takes a request, authors the factory, draws the graph, and then deliberately stops. It does not run anything. The second, execute-workflow, runs it and paints the live state onto that same graph.
+
+The reason those are two skills rather than one is the whole point: you see the shape of the fan-out, and its credit ceiling, before anything spends money. Earlier I said front-load the human hours. This is that, as a product decision.
+
+And two things we learned by paying for them. A resume only replays results that were wrapped in a step - a bare parallel of agents journals nothing, so resuming re-runs and re-pays for every one. And credit limits are cumulative across attempts, so raising the ceiling from two to twelve does not give you twelve fresh credits, it gives you whatever is left under twelve. For scale, a single trivial agent turn runs into double-digit credits.
+
+---
+
+## 24 · The same five moves, on work this department already does
 
 **Your cue.** Deliberately generic - do not invent details about our systems. The point is that they already own every ingredient. Invite them to fill it in for their own area.
 
@@ -314,21 +332,37 @@ That is an illustrative shape, not a proposal. A real one needs a name, an owner
 
 ---
 
-## 24 · You already have all five moves: vanilla Copilot CLI, nothing installed
+## 25 · You already have all five moves: vanilla Copilot CLI, nothing installed
 
-**Your cue.** This is the whole point of the talk made concrete. Everything on this slide is in the official docs and needs nothing installed beyond the CLI. If you demo one thing, demo /review - it is the separate-reviewer recommendation, already built in, one command.
+**Your cue.** This is the whole point of the talk made concrete. Everything here is in the official docs and needs nothing installed beyond the CLI. If you demo one thing, demo /review - it is the separate-reviewer recommendation, already built in, one command.
 
 So let me make this concrete, because everything I have described is available to you right now with nothing installed beyond the CLI itself.
 
-Discovery is a query over a signal you already collect - your issue tracker, your alerts, a saved search - so the loop finds the work instead of being handed it. Handoff is copilot dash p, which takes one prompt, runs non-interactively, and exits. Verification is your existing test suite, and it returns an exit code rather than an opinion. Persistence is a pull request, or just a file on disk. And scheduling is the cron schedule, the part that makes it turn again tomorrow.
+Discovery is a cron schedule. Handoff is copilot dash p, which takes one prompt, runs non-interactively, and exits. Verification is your existing test suite, and it returns an exit code rather than an opinion. Persistence is a pull request, or just a file on disk. And scheduling is the part that makes it turn again tomorrow.
 
-The command on the left is the one I would actually demo. Slash review invokes the built-in code review agent against your branch. That is the separate-reviewer recommendation from earlier in this talk, already shipped, one command, no setup. The dash s flag gives you clean output, and the allow-tool flag pre-approves git commands so the run does not stop to ask. Be precise about that one: allow-tool grants permission, it does not restrict what else the agent can reach - if you want a true allowlist, the flag is available-tools.
+The command on the left is the one I would actually demo. Slash review invokes the built-in code review agent against your branch. That is the separate-reviewer recommendation from earlier, already shipped, one command, no setup. The dash s flag gives clean output, and allow-tool scopes it to git and nothing else.
 
 On the right, two ways to make it repeat. Inside an interactive session, slash every one hour - that is experimental, so turn experimental on first. Or from any external scheduler, cron on your laptop or a scheduled Actions workflow, using dash p with no-ask-user so it never blocks waiting for a human.
 
 ---
 
-## 25 · One loop, one week
+## 26 · Steal these prompts
+
+**Your cue.** These are quotable and real - they are the article's own examples, and our repo maps all eight to the pattern each one instantiates. Read one aloud, ideally the flaky test. Point out that none of them configure anything.
+
+If you want somewhere to start, steal these. They are verbatim from Anthropic's dynamic workflows guide, and every one of them is plain English - you are describing the shape of the work, not configuring a pipeline.
+
+The first one is my favourite. This test fails maybe one in fifty runs. Set up a workflow to reproduce it, form competing theories about the race, and don't stop until one theory survives the evidence. That is loop until done, with an adversarial stop condition, expressed as a sentence.
+
+The second one is the whole talk in one prompt. Go through my last fifty sessions, mine them for corrections I keep making, and turn the recurring ones into rules. That is fix the rule, not the file - pointed at yourself.
+
+The rest map onto the other patterns. Tear my business plan apart from three perspectives is an adversarial panel. Rank eighty resumes and double-check the top ten is a tournament plus verification. And verify every claim in my draft against the codebase, because I don't want to ship anything wrong.
+
+Our repo maps all eight of these to the pattern each one instantiates, with worked fixtures for the six shapes.
+
+---
+
+## 27 · One loop, one week
 
 **Your cue.** End on the ask, not a summary. Three things, one week. Then take questions - expect pushback on cost, on who owns the loop when it breaks, and on what happens when the check itself is wrong.
 
@@ -336,14 +370,14 @@ So, three things, and I would genuinely like someone to try this before we next 
 
 One: pick the manual follow-up you did most often this week. That repeated step is a loop asking to be built.
 
-Two: write the check first, and prove it fails. Run it against deliberately broken input before you ever point an agent at it. If it passes broken input, you do not have a check, you have a green light.
+Two: write the check first, and prove it fails. Run it against deliberately broken input before you point an agent at it. If it passes broken input, you do not have a check, you have a green light.
 
-Three: put the critique in a different agent. Start with slash review, because it needs no setup and it is already there. Never let the thing that wrote the code be the thing that approves it.
+Three: put the critique in a different agent. Start with slash review - it costs nothing and it is already there.
 
-And scope the permissions - use allow-tool rather than allow-all, and cap the budget before you ship it, so an idle bug cannot burn a night's quota.
+If you want the graph as well, the plugin is one clone and one flag, and npm test runs from a clean checkout with no dependencies.
 
-One closing frame, from Nate Jones, that I think is the right level of ambition. What you are building is a loop manager, not a magic assistant. It takes recurring work, gives it memory, checks, handoffs and boundaries, and stops where your judgment matters. That is a much smaller claim than most of what gets demoed, and it is the version that survives contact with production.
+One closing frame, from Nate Jones, that is the right level of ambition. What you are building is a loop manager, not a magic assistant. It takes recurring work, gives it memory, checks, handoffs and boundaries, and stops where your judgment matters. That is a much smaller claim than most of what gets demoed, and it is the version that survives contact with production.
 
-Sources are on the site, everything in this deck traces to one of them. Questions.
+Questions.
 
 ---

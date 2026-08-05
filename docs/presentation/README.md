@@ -1,7 +1,7 @@
 # Loop Engineering — presentation
 
 A self-contained HTML presenter deck on loop engineering, built for an Azure HPC
-department briefing. 25 slides, about 20 minutes.
+department briefing. 27 slides, about 20 minutes.
 
 **Live:** https://ridermw.github.io/copilot-factory-workflows/presentation/
 
@@ -43,10 +43,10 @@ accounting of what it costs you when you skip them.
 The deck argues that verification should be mechanical rather than assumed, so it was
 verified the same way:
 
-- **734 text/background contrast pairs measured** in both themes against composited
+- **860 text/background contrast pairs measured** in both themes against composited
   backgrounds, including SVG diagram text. Zero failures at WCAG 2.1 AA.
 - **Zero slide overflow** at 1440&times;810, 768&times;1024 and 390&times;844, in both themes.
-- **25 print pages**, light palette forced.
+- **27 print pages**, light palette forced.
 - Every slide carries a real heading element; controls are keyboard-reachable.
 
 Two measured fixes were applied. `--cp-text-muted` (#919191) lands at 3.53:1 on the
@@ -61,6 +61,19 @@ recurring contrast defect this design system already paid for, so it is avoided.
 Marker ids are unique per diagram — several SVGs share one document, and duplicated
 ids silently drop every arrowhead after the first.
 
+## Dynamic workflows
+
+The deck lands on **dynamic workflows** — Anthropic's six composable patterns, one of
+which ("loop until done") is what the whole talk is about. It then shows this repo's
+own contribution: `plan-workflow` authors the factory and draws the graph *and stops*,
+`execute-workflow` runs it and paints live state on top. Nothing spends until the shape
+and its credit ceiling are visible.
+
+The "steal these prompts" slide quotes six of the eight example prompts from
+[A harness for every task](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code),
+which [`examples/corpus.mjs`](../../examples/corpus.mjs) maps to the pattern each one
+instantiates.
+
 ## Call to action
 
 The closing slides use only **vanilla GitHub Copilot CLI** — nothing installed beyond
@@ -70,6 +83,9 @@ taken from the official docs:
 - [Running GitHub Copilot CLI programmatically](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/run-cli-programmatically)
 - [Automating tasks with Copilot CLI and GitHub Actions](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/automate-with-actions)
 - [Scheduling prompts in GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/schedule-prompts)
+
+The final slide also points at this plugin — one clone, one `--plugin-dir` flag, and an
+`npm test` that runs from a clean checkout with no dependencies.
 
 ## Credits
 

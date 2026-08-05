@@ -9,7 +9,7 @@ numbers, cues and script always match what is on screen.
 Open the deck and press **N** for notes, or **S** for the presenter console, which
 shows both alongside a live preview and a timer.
 
-Spoken length: **3313 words** across 23 slides — about 20 minutes at a brisk
+Spoken length: **3770 words** across 25 slides — about 20 minutes at a brisk
 conversational pace.
 
 ---
@@ -128,7 +128,7 @@ Five unconnected sources, different domains, same result. That is about as close
 
 ---
 
-## 10 · Separation is a dial, not a switch: turn it up until the reviewer can disagree
+## 10 · Separation is a dial, not a switch
 
 **Your cue.** State the recommendation plainly here: no self-review. Adversarial review, rubber duck, or spar, in a different agent. This is the Monday ask, stated early.
 
@@ -238,7 +238,7 @@ Token blowout: the only one that hits a bill directly. One bug can spin all nigh
 
 ---
 
-## 18 · Twenty green pull requests, one morning: the four costs are one failure wearing four faces
+## 18 · Twenty green pull requests, one morning: the costs feed each other
 
 **Your cue.** Walk the cycle once with your finger. End on the buried errors. Do not soften the landing.
 
@@ -262,7 +262,23 @@ That is the real argument for the adversarial reviewer. Not that it catches more
 
 ---
 
-## 20 · Every component encodes an assumption about what the model cannot do: so components expire
+## 20 · A loop is not better because it never asks: it is better when the questions are
+
+**Your cue.** This answers the obvious objection - if the loop runs without me, when does it come back? Nate Jones' framing. Land the distinction: the bad question makes you the context store; the good question hands you a decision only you can make.
+
+One more thing, because when I say the loop runs without you, the fair objection is: so when does it come back?
+
+The framing I like here is Nate Jones'. A loop is not better because it never asks. An agent that never asks can be dangerous, and sometimes it is only hiding uncertainty.
+
+A bad agent asks because it is lost. It makes you paste context it could have gathered. It asks what changed because it did not remember. It asks whether to take the obvious next step because nobody gave it the shape of the job. It is asking you to supervise, and it has confused activity with responsibility.
+
+A better agent asks because the loop reached a real boundary. The action has consequences. The source is weak. There are two reasonable choices and it cannot know which one is yours - because the answer depends on risk, or taste, or money, or privacy, or a relationship.
+
+So the goal is not fewer questions. It is better questions. If your loop is asking you the first kind, that is a defect in the loop, not diligence.
+
+---
+
+## 21 · Every component encodes an assumption about what the model cannot do: so components expire
 
 **Your cue.** This is the slide that prevents cargo-culting. Frame the deletions as a result, not an embarrassment.
 
@@ -274,7 +290,7 @@ So the test is not does a loop need an evaluator. It is: does this task sit beyo
 
 ---
 
-## 21 · Where I think this goes: loops are one shape of a larger thing
+## 22 · Where I think this goes: loops are one shape of a larger thing
 
 **Your cue.** Label this as your framing, out loud. The sources do not make the superset claim - you do. This room respects that distinction and will notice if you blur it.
 
@@ -286,7 +302,7 @@ That also resolves the tension from the last slide. The five moves define the sh
 
 ---
 
-## 22 · The same five moves, on work this department already does
+## 23 · The same five moves, on work this department already does
 
 **Your cue.** Deliberately generic - do not invent details about our systems. The point is that they already own every ingredient. Invite them to fill it in for their own area.
 
@@ -298,20 +314,36 @@ That is an illustrative shape, not a proposal. A real one needs a name, an owner
 
 ---
 
-## 23 · One loop, one week
+## 24 · You already have all five moves: vanilla Copilot CLI, nothing installed
 
-**Your cue.** End on the ask, not on a summary. Three things, one week. Then take questions - expect pushback on cost and on who owns the loop when it breaks.
+**Your cue.** This is the whole point of the talk made concrete. Everything on this slide is in the official docs and needs nothing installed beyond the CLI. If you demo one thing, demo /review - it is the separate-reviewer recommendation, already built in, one command.
 
-Three things, and I would genuinely like someone to try this before we next meet.
+So let me make this concrete, because everything I have described is available to you right now with nothing installed beyond the CLI itself.
+
+Discovery is a cron schedule. Handoff is copilot dash p, which takes one prompt, runs non-interactively, and exits. Verification is your existing test suite, and it returns an exit code rather than an opinion. Persistence is a pull request, or just a file on disk. And scheduling is the part that makes it turn again tomorrow.
+
+The command on the left is the one I would actually demo. Slash review invokes the built-in code review agent against your branch. That is the separate-reviewer recommendation from earlier in this talk, already shipped, one command, no setup. The dash s flag gives you clean output, and the allow-tool flag scopes it to git and nothing else.
+
+On the right, two ways to make it repeat. Inside an interactive session, slash every one hour - that is experimental, so turn experimental on first. Or from any external scheduler, cron on your laptop or a scheduled Actions workflow, using dash p with no-ask-user so it never blocks waiting for a human.
+
+---
+
+## 25 · One loop, one week
+
+**Your cue.** End on the ask, not a summary. Three things, one week. Then take questions - expect pushback on cost, on who owns the loop when it breaks, and on what happens when the check itself is wrong.
+
+So, three things, and I would genuinely like someone to try this before we next meet.
 
 One: pick the manual follow-up you did most often this week. That repeated step is a loop asking to be built.
 
-Two: write the check first, and prove it fails. Run it against deliberately broken input before you ever point an agent at it. If it passes broken input, you do not have a check.
+Two: write the check first, and prove it fails. Run it against deliberately broken input before you ever point an agent at it. If it passes broken input, you do not have a check, you have a green light.
 
-Three: put the critique in a different agent. Adversarial review, rubber duck, spar - whatever your tooling calls it. Never let the thing that wrote the code be the thing that approves it.
+Three: put the critique in a different agent. Start with slash review, because it costs you nothing and it is already there. Never let the thing that wrote the code be the thing that approves it.
 
-And cap the budget before you ship it, so an idle bug cannot burn a night's quota.
+And scope the permissions - use allow-tool rather than allow-all, and cap the budget before you ship it, so an idle bug cannot burn a night's quota.
 
-Sources are here, everything in this deck traces to one of them, and I am happy to share the full inventory. Questions.
+One closing frame, from Nate Jones, that I think is the right level of ambition. What you are building is a loop manager, not a magic assistant. It takes recurring work, gives it memory, checks, handoffs and boundaries, and stops where your judgment matters. That is a much smaller claim than most of what gets demoed, and it is the version that survives contact with production.
+
+Sources are on the site, everything in this deck traces to one of them. Questions.
 
 ---

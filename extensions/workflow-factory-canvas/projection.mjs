@@ -312,7 +312,9 @@ export function projectRun(manifest, detail, options = {}) {
             id: mn.id,
             label: mn.label,
             kind: mn.kind ?? "agent",
+            detail: mn.detail ?? null,
             phaseId,
+            groupId: mn.groupId ?? null,
             declared: true,
             unmapped: false,
             ...summary,
@@ -412,7 +414,7 @@ export function projectRun(manifest, detail, options = {}) {
             // An edge animates when work is flowing across it: the target is
             // running, or the source is running and the target is waiting.
             const active = to === "running" || (from === "running" && to === "queued");
-            return { from: e.from, to: e.to, active };
+            return { from: e.from, to: e.to, label: e.label ?? null, active };
         });
 
     const counts = {};
@@ -427,6 +429,25 @@ export function projectRun(manifest, detail, options = {}) {
         text: r.text ?? "",
         recordedAt: toIso(r.recordedAt),
     }));
+
+    // Container groups resolve to the set of members that actually made it into
+    // the render set. A group is drawn as a bounding box around its members, so
+    // a group with nothing left to bound has no box and is dropped.
+    //
+    // Declared manifest nodes currently always survive the node cap above (it
+    // only trims undeclared runtime agents), so in practice no group loses
+    // members here. That is an invariant of the trimming logic rather than a
+    // guarantee of the schema, so resolve membership from `renderNodes` instead
+    // of assuming it -- a group box computed from a missing node would produce
+    // NaN geometry and fail silently.
+    const groups = (manifest.groups ?? [])
+        .map((g) => ({
+            id: g.id,
+            title: g.title,
+            detail: g.detail ?? null,
+            nodeIds: renderNodes.filter((n) => n.groupId === g.id).map((n) => n.id),
+        }))
+        .filter((g) => g.nodeIds.length > 0);
 
     return {
         schema: 1,
@@ -456,6 +477,7 @@ export function projectRun(manifest, detail, options = {}) {
         phases,
         nodes: renderNodes,
         edges,
+        groups,
         counts,
         unmappedCount,
         truncated,

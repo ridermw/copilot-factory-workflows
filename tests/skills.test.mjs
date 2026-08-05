@@ -11,19 +11,10 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { check, summary } from "./_check.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const skillsDir = join(here, "..", "skills");
-
-let failures = 0;
-function check(name, cond, extra) {
-    if (cond) {
-        console.log(`  ok   ${name}`);
-    } else {
-        failures++;
-        console.log(`  FAIL ${name}${extra ? ` -- ${JSON.stringify(extra)}` : ""}`);
-    }
-}
 
 /** Split a SKILL.md into its YAML frontmatter block and body. */
 function readSkill(name) {
@@ -158,5 +149,4 @@ console.log("\n== cross-cutting");
     }
 }
 
-console.log(`\n${failures === 0 ? "ALL PASS" : failures + " FAILURE(S)"}`);
-process.exit(failures === 0 ? 0 : 1);
+summary();

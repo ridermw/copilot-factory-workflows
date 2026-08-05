@@ -139,10 +139,22 @@ export function makeDom() {
 /**
  * Execute the canvas client script against the shim and return a `render`
  * function plus the shim handles.
+ *
+ * The compiled function is cached per source string, because compiling the
+ * whole client script is the one cost here that scales with the size of the
+ * fixture corpus. Only the *function* is shared -- every call still gets a
+ * fresh DOM, and the DOM is what carries per-test state, so isolation between
+ * callers is unaffected.
  */
+const compiledClients = new Map();
+
 export function runClient(clientJs) {
     const dom = makeDom();
-    const fn = new Function("document", "EventSource", "fetch", "window", clientJs + "\n;return { render: render, layout: typeof renderGraph === 'function' ? renderGraph : null };");
+    let fn = compiledClients.get(clientJs);
+    if (!fn) {
+        fn = new Function("document", "EventSource", "fetch", "window", clientJs + "\n;return { render: render, layout: typeof renderGraph === 'function' ? renderGraph : null };");
+        compiledClients.set(clientJs, fn);
+    }
     const api = fn(dom.doc, dom.EventSource, dom.fetchImpl, {});
     return { ...dom, ...api };
 }

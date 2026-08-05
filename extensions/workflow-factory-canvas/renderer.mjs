@@ -112,6 +112,70 @@ main { flex: 1 1 auto; overflow: auto; position: relative; padding: 16px; }
 .node.state-failed { border-color: var(--true-color-red, #cf222e); }
 .node.state-halted { border-color: var(--true-color-yellow, #9a6700); }
 .node.state-cancelled { opacity: .62; }
+.node .detail {
+  font-size: var(--text-body-small, 12px);
+  color: var(--text-color-muted, #59636e);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: .85;
+}
+
+/* Node shapes.
+   node.kind is free-form in the manifest (any string up to 60 chars), so it is
+   never interpolated into a class name directly. Only an allow-listed kind
+   produces a class, and every such class is "shape-" prefixed -- an author
+   writing kind: "state-succeeded" therefore yields shape-state-succeeded,
+   which matches nothing, instead of painting the node green. Unknown kinds
+   fall through to the default rectangle. */
+.node.shape-decision, .node.shape-gate { border-radius: 16px; }
+.node.shape-decision .label::before,
+.node.shape-gate .label::before { content: "\\25C6\\00A0"; opacity: .5; }
+.node.shape-terminal { border-radius: 999px; }
+.node.shape-terminal .label::before { content: "\\25CF\\00A0"; opacity: .5; }
+.node.shape-barrier { border-radius: 2px; border-top-width: 3px; border-bottom-width: 3px; }
+.node.shape-barrier .label::before { content: "\\2016\\00A0"; opacity: .5; }
+.node.shape-input .label::before { content: "\\25B6\\00A0"; opacity: .5; }
+.node.shape-output .label::before { content: "\\25A0\\00A0"; opacity: .5; }
+
+/* Container groups: a labelled box drawn behind its members. Groups may span
+   phase columns, so they cannot rely on DOM append order to sit behind nodes
+   the way .phase-band does -- stacking is pinned with z-index instead. */
+.group-box {
+  position: absolute; z-index: 0;
+  border: 1px solid var(--border-color-default, #d1d9e0);
+  border-radius: 12px;
+  background: var(--background-color-muted, rgba(101,109,118,.06));
+  /* The box carries the group's detail as its title, so it has to be
+     hoverable. Member nodes sit at z-index 1 and still receive their own
+     events; only the bare backdrop between them resolves to the group. */
+  pointer-events: auto;
+}
+.group-label {
+  position: absolute; z-index: 0;
+  font-size: var(--text-body-small, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-color-muted, #59636e);
+  white-space: nowrap; pointer-events: none;
+}
+.phase-band { z-index: 0; }
+.node { z-index: 1; }
+
+/* Edge labels sit on the curve, so they are painted with a background-coloured
+   stroke underneath the glyphs (paint-order: stroke) to punch a halo through
+   the path and through any label they overlap. */
+text.edge-label {
+  font-size: 11px;
+  fill: var(--text-color-muted, #59636e);
+  paint-order: stroke;
+  stroke: var(--background-color-default, #fff);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  /* #edges disables pointer events wholesale so the SVG never blocks the
+     nodes beneath it. Re-enable them just for the label, otherwise its
+     <title> -- the only place the untruncated branch text survives -- can
+     never be surfaced. */
+  pointer-events: auto;
+}
+text.edge-label.active { fill: var(--true-color-blue, #0969da); }
 
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 @keyframes flow { to { stroke-dashoffset: -16; } }
@@ -154,6 +218,33 @@ footer .bar-row:hover { color: var(--text-color-default, #1f2328); }
 export const CLIENT_JS = `
 "use strict";
 var NODE_W = 210, NODE_H = 58, V_GAP = 14, COL_GAP = 72, PAD = 8, HEAD_H = 30;
+
+// Node kinds that map to a distinct shape. Anything outside this list renders
+// as the default rectangle. See the "shape-" CSS block for why this is an
+// allow-list rather than a passthrough.
+var SHAPE_KINDS = { decision: 1, gate: 1, barrier: 1, terminal: 1, input: 1, output: 1 };
+function shapeClass(kind) {
+  return SHAPE_KINDS[kind] ? " shape-" + kind : "";
+}
+
+// A node carrying a "detail" subtitle needs a third text line, so it is taller.
+// Heights are per-node rather than a single constant because column stacking,
+// the phase band, and edge anchor points all read the real box height.
+var DETAIL_H = 18;
+function nodeHeight(n) {
+  return n && n.detail ? NODE_H + DETAIL_H : NODE_H;
+}
+
+// Edge labels are capped at 120 chars by the schema, which is far wider than a
+// column at 11px. Truncate for display so a long label cannot smear across the
+// whole graph; the full text is attached to the label element as a <title> and
+// an aria-label, so truncation never destroys information.
+var MAX_EDGE_LABEL = 28;
+function edgeLabelText(s) {
+  s = String(s);
+  return s.length > MAX_EDGE_LABEL ? s.slice(0, MAX_EDGE_LABEL - 1) + "\\u2026" : s;
+}
+
 var STATE_COLOR = {
   "not-started": "var(--text-color-muted, #59636e)",
   "queued": "var(--true-color-blue-muted, #79c0ff)",
@@ -316,7 +407,10 @@ function renderGraph(v) {
     head.style.width = NODE_W + "px";
     graph.appendChild(head);
 
-    var bandH = Math.max(NODE_H, list.length * NODE_H + Math.max(0, list.length - 1) * V_GAP);
+    var bandH = 0;
+    for (var bq = 0; bq < list.length; bq++) bandH += nodeHeight(list[bq]);
+    bandH += Math.max(0, list.length - 1) * V_GAP;
+    bandH = Math.max(NODE_H, bandH);
     var band = el("div", "phase-band");
     band.style.left = (x - PAD) + "px";
     band.style.top = (HEAD_H - PAD) + "px";
@@ -327,13 +421,14 @@ function renderGraph(v) {
     var y = HEAD_H;
     for (var q = 0; q < list.length; q++) {
       var node = list[q];
-      pos[node.id] = { x: x, y: y, w: NODE_W, h: NODE_H };
+      var nh = nodeHeight(node);
+      pos[node.id] = { x: x, y: y, w: NODE_W, h: nh };
 
-      var box = el("div", "node state-" + node.state + (node.unmapped ? " unmapped" : ""));
+      var box = el("div", "node state-" + node.state + shapeClass(node.kind) + (node.unmapped ? " unmapped" : ""));
       box.style.left = x + "px";
       box.style.top = y + "px";
       box.style.width = NODE_W + "px";
-      box.style.height = NODE_H + "px";
+      box.style.height = nh + "px";
 
       var bar = el("div", "bar");
       bar.style.background = STATE_COLOR[node.state] || STATE_COLOR["not-started"];
@@ -347,6 +442,7 @@ function renderGraph(v) {
       if (node.activeMs) meta.push(fmtMs(node.activeMs));
       if (node.activity) meta.push(node.activity);
       box.appendChild(el("div", "meta", meta.join("  \\u00b7  ")));
+      if (node.detail) box.appendChild(el("div", "detail", node.detail));
 
       var tip = [node.label, "state: " + node.state, "kind: " + node.kind];
       if (node.rawStatuses && node.rawStatuses.length) tip.push("runtime status: " + node.rawStatuses.join(", "));
@@ -359,13 +455,71 @@ function renderGraph(v) {
       box.title = tip.join("\\n");
 
       graph.appendChild(box);
-      y += NODE_H + V_GAP;
+      y += nh + V_GAP;
     }
     maxY = Math.max(maxY, y);
     x += NODE_W + COL_GAP;
   }
 
-  var width = Math.max(x - COL_GAP, NODE_W);
+  // Container groups are drawn from the laid-out node rectangles, so a group may
+  // span any number of phase columns. They are appended after the nodes but
+  // paint behind them via z-index, and they run BEFORE the canvas is sized so a
+  // box hanging past the last node still extends the scrollable area.
+  //
+  //      phase A          phase B          phase C
+  //   +----------------------------+
+  //   |  [n1]            [n2]      |   <- group "quarantine" spans A..B
+  //   +----------------------------+
+  //                      +-------------------------+
+  //                      |  [n3]         [n4]      |   <- group "trusted"
+  //                      +-------------------------+
+  var groups = v.groups || [];
+  var maxX = x - COL_GAP;
+  for (var gi = 0; gi < groups.length; gi++) {
+    var g = groups[gi];
+    var ids = g.nodeIds || [];
+    var gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity, seen = 0;
+    for (var mi = 0; mi < ids.length; mi++) {
+      var mp = pos[ids[mi]];
+      // A member with no laid-out rectangle contributes nothing to the bounds.
+      // Without this guard the bounds stay at +/-Infinity and every geometry
+      // value below becomes NaN, which renders as an invisible box rather than
+      // an error -- a silent failure.
+      if (!mp) continue;
+      seen++;
+      if (mp.x < gx1) gx1 = mp.x;
+      if (mp.y < gy1) gy1 = mp.y;
+      if (mp.x + mp.w > gx2) gx2 = mp.x + mp.w;
+      if (mp.y + mp.h > gy2) gy2 = mp.y + mp.h;
+    }
+    if (!seen) continue;
+
+    // The label sits inside the top padding, so gpTop must clear a line of text.
+    var gpx = 12, gpTop = 22, gpBot = 12;
+    var gLeft = Math.max(0, gx1 - gpx);
+    var gTop = Math.max(0, gy1 - gpTop);
+    var gW = gx2 + gpx - gLeft;
+    var gH = gy2 + gpBot - gTop;
+
+    var gbox = el("div", "group-box");
+    gbox.style.left = gLeft + "px";
+    gbox.style.top = gTop + "px";
+    gbox.style.width = gW + "px";
+    gbox.style.height = gH + "px";
+    gbox.title = g.detail ? g.title + " -- " + g.detail : g.title;
+    graph.appendChild(gbox);
+
+    var glab = el("div", "group-label", g.title);
+    glab.style.left = (gLeft + 8) + "px";
+    glab.style.top = (gTop + 3) + "px";
+    graph.appendChild(glab);
+
+    maxX = Math.max(maxX, gLeft + gW);
+    maxY = Math.max(maxY, gTop + gH);
+  }
+
+  var width = Math.max(maxX, NODE_W);
+
   var height = Math.max(maxY, HEAD_H + NODE_H) + PAD * 2;
   graph.style.width = width + "px";
   graph.style.height = height + "px";
@@ -379,18 +533,47 @@ function renderGraph(v) {
     var x1 = a.x + a.w, y1 = a.y + a.h / 2;
     var x2 = b.x, y2 = b.y + b.h / 2;
     var dx = Math.max(28, Math.abs(x2 - x1) * 0.5);
-    var d;
+    var d, mx, my;
     if (x2 >= x1) {
       d = "M " + x1 + " " + y1 + " C " + (x1 + dx) + " " + y1 + ", " + (x2 - dx) + " " + y2 + ", " + x2 + " " + y2;
+      // Cubic midpoint at t=0.5 is (P0 + 3*P1 + 3*P2 + P3) / 8. On this branch
+      // the +dx and -dx control offsets cancel exactly, so it collapses to the
+      // plain average of the endpoints -- the label lands between the boxes.
+      mx = (x1 + x2) / 2;
+      my = (y1 + y2) / 2;
     } else {
       // Backward or same-column edge: bow out to the right of both boxes.
       var bow = Math.max(a.x + a.w, b.x + b.w) + 34;
-      d = "M " + x1 + " " + y1 + " C " + bow + " " + y1 + ", " + bow + " " + y2 + ", " + (b.x + b.w) + " " + y2;
+      var bx2 = b.x + b.w;
+      d = "M " + x1 + " " + y1 + " C " + bow + " " + y1 + ", " + bow + " " + y2 + ", " + bx2 + " " + y2;
+      // Same t=0.5 formula, but BOTH control points sit out at "bow", which
+      // drags the curve far to the right. Reusing the forward branch's average
+      // here would drop the label back on top of the nodes instead of on the
+      // visible part of the curve.
+      mx = (x1 + 6 * bow + bx2) / 8;
+      my = (y1 + y2) / 2;
     }
     var path = document.createElementNS(svgNS, "path");
     path.setAttribute("d", d);
     path.setAttribute("class", "edge" + (edge.active ? " active" : ""));
     svg.appendChild(path);
+
+    if (edge.label) {
+      var lab = document.createElementNS(svgNS, "text");
+      lab.setAttribute("x", String(mx));
+      lab.setAttribute("y", String(my - 5));
+      lab.setAttribute("text-anchor", "middle");
+      lab.setAttribute("class", "edge-label" + (edge.active ? " active" : ""));
+      lab.textContent = edgeLabelText(edge.label);
+      // Display text may be truncated, so carry the full branch condition as
+      // the element's accessible name. Without this the omitted characters are
+      // unrecoverable for everyone, not just screen-reader users.
+      lab.setAttribute("aria-label", String(edge.label));
+      var lt = document.createElementNS(svgNS, "title");
+      lt.textContent = String(edge.label);
+      lab.appendChild(lt);
+      svg.appendChild(lab);
+    }
   }
 }
 

@@ -49,6 +49,7 @@ export const MANIFEST_INPUT_SCHEMA = Object.freeze({
                             id: { type: "string", minLength: 1, maxLength: 200 },
                             label: { type: "string", minLength: 1, maxLength: 200 },
                             phaseId: { type: "string", minLength: 1, maxLength: 200 },
+                            groupId: { type: "string", minLength: 1, maxLength: 200 },
                             kind: { type: "string", maxLength: 60 },
                             detail: { type: "string", maxLength: 500 },
                         },
@@ -68,6 +69,24 @@ export const MANIFEST_INPUT_SCHEMA = Object.freeze({
                         },
                     },
                 },
+                // Container groups draw a labelled box around a set of nodes.
+                // Purely visual, and free to span phases -- the article's
+                // "quarantine" / "trusted" boundaries cut across stages rather
+                // than lining up with them.
+                groups: {
+                    type: "array",
+                    maxItems: 50,
+                    items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["id", "title"],
+                        properties: {
+                            id: { type: "string", minLength: 1, maxLength: 200 },
+                            title: { type: "string", minLength: 1, maxLength: 200 },
+                            detail: { type: "string", maxLength: 500 },
+                        },
+                    },
+                },
             },
         },
         runId: { type: "string", minLength: 1, maxLength: 200 },
@@ -80,6 +99,7 @@ export const EMPTY_MANIFEST = Object.freeze({
     phases: [],
     nodes: [],
     edges: [],
+    groups: [],
 });
 
 /**
@@ -170,6 +190,7 @@ export function normalizeManifest(raw) {
             id,
             label,
             phaseId,
+            groupId: typeof n?.groupId === "string" && n.groupId.trim() ? n.groupId.trim() : null,
             kind: typeof n?.kind === "string" && n.kind.trim() ? n.kind.trim() : "agent",
             detail: n?.detail ?? null,
         });
@@ -206,8 +227,53 @@ export function normalizeManifest(raw) {
 
     const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : factoryName || "Workflow";
 
+    // Container groups are validated last, because membership is expressed on
+    // the nodes and a group is only meaningful once its members are known.
+    //
+    //   groups[] declared ──┐
+    //                       ├─► id missing/dup ──► error, drop group
+    //   nodes[].groupId ────┘
+    //                       ├─► points at unknown group ──► error, clear the
+    //                       │   pointer but KEEP the node (a bad box must not
+    //                       │   silently delete work from the graph)
+    //                       └─► group ends with 0 members ──► warn, drop group
+    //                           (an empty box renders as a stray rectangle)
+    const groups = [];
+    const seenGroup = new Set();
+    for (const [i, g] of (Array.isArray(raw.groups) ? raw.groups : []).entries()) {
+        const id = typeof g?.id === "string" ? g.id.trim() : "";
+        const gTitle = typeof g?.title === "string" ? g.title.trim() : "";
+        if (!id) {
+            errors.push(`Group at index ${i} has no \`id\`.`);
+            continue;
+        }
+        if (seenGroup.has(id)) {
+            errors.push(`Duplicate group id \`${id}\`.`);
+            continue;
+        }
+        seenGroup.add(id);
+        groups.push({ id, title: gTitle || id, detail: g?.detail ?? null });
+    }
+
+    const memberCount = new Map();
+    for (const n of nodes) {
+        if (!n.groupId) continue;
+        if (!seenGroup.has(n.groupId)) {
+            errors.push(`Node \`${n.id}\` references unknown group \`${n.groupId}\`.`);
+            n.groupId = null;
+            continue;
+        }
+        memberCount.set(n.groupId, (memberCount.get(n.groupId) ?? 0) + 1);
+    }
+
+    const liveGroups = groups.filter((g) => {
+        if (memberCount.get(g.id)) return true;
+        warnings.push(`Group \`${g.id}\` has no member nodes and was dropped.`);
+        return false;
+    });
+
     return {
-        manifest: { factoryName: factoryName || null, title, phases, nodes, edges },
+        manifest: { factoryName: factoryName || null, title, phases, nodes, edges, groups: liveGroups },
         errors,
         warnings,
     };

@@ -171,6 +171,28 @@ Write the normal implementation plan. Name the factory explicitly so
 
 No `run_factory`. Not "just to check". The user approves the shape first.
 
+## Pattern catalog
+
+Six shapes cover most real workflows. Each is a working fixture in
+[`examples/patterns/`](../../examples/patterns/) — real `meta` + `run` + manifest,
+executed by the test suite, not pseudocode.
+
+| Shape | Use when | Fixture |
+| --- | --- | --- |
+| Classify-and-act | one of N mutually exclusive handlers applies | `classify-and-act.mjs` |
+| Fan-out-and-synthesize | independent work converges on one answer | `fanout-and-synthesize.mjs` |
+| Adversarial verification | a claim needs challenging, not just producing | `adversarial-verification.mjs` |
+| Generate-and-filter | quantity is cheap and selection is the hard part | `generate-and-filter.mjs` |
+| Tournament | candidates are best compared against each other | `tournament.mjs` |
+| Loop until done | the work is unbounded until a gate says stop | `loop-until-done.mjs` |
+
+Compose them. A real workflow is often fan-out into a tournament, or a loop whose
+body classifies. Start from the shape that matches the *decision* the workflow
+makes, not the one that matches its size.
+
+Shapes derived from Anthropic's
+["A harness for every task"](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code).
+
 ## Worked example
 
 `meta`:

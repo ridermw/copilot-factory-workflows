@@ -81,7 +81,60 @@ and the two bugs found during that exercise were both in assumptions that
 looked correct on paper.
 
 **Context:** Needs a factory that deliberately fails an agent and one that
-halts, plus an agent whose label does not appear in the manifest.
+halts, plus an agent whose label does not appear in the manifest. The fixtures in
+`examples/runs/` now cover all three on paper — `memory-and-rules` scenario 3
+carries an undeclared `rule:5`, and several scenarios fail a node mid-run — so
+this is now specifically about confirming the synthetic wire data was right, not
+about discovering what the states look like. Do it as part of the capture work
+below rather than as a separate exercise.
 
 **Blocked by:** Nothing; it costs credits, which is the only reason it is
 deferred.
+
+## Freeze real run detail as fixture captures
+
+**What:** Run the ten `examples/` fixtures as real factories, capture the
+`FactoryRunDetail` each one emits into `examples/captures/`, and derive an
+`assertWireShape(detail)` helper from those captures that every fixture scenario
+is then checked against.
+
+**Why:** Every scenario in `examples/` is currently a hand-written approximation
+of the wire format. `projection.mjs` coerces silently in at least four places —
+`Number(a?.startedAt)` expects epoch milliseconds, so an ISO string becomes `NaN`,
+gets filtered out, and surfaces as `null` with no error; `Number(a?.activeMs) || 0`
+turns any junk into `0`. A fixture can therefore be wrong about the format the
+runtime actually sends and still pass all four suites. Captured data is the only
+thing that closes that gap, and once frozen it replays forever at zero cost.
+
+**Context:** The fixtures currently omit timestamps entirely, which sidesteps the
+coercion rather than testing it — that was deliberate, because guessing at a
+format and asserting the guess is worse than not asserting. Ten runs is roughly
+49 agents. Limits are cumulative across attempts, so budget the ceiling generously
+up front rather than raising it mid-run, and keep every prompt to a one-word
+answer. A run that trips `factory_limit_reached` still yields a useful partial
+capture; write it and mark it partial. Capture immediately on completion — run
+detail is not retrievable later.
+
+**Depends on:** Nothing technical. It costs real credits, which is why it is not
+in the first version.
+
+## Compare canvas renders against the article diagrams
+
+**What:** Screenshot each fixture's rendered canvas and lay it out side by side
+with the corresponding illustration from the source article for human judgement.
+
+**Why:** The fixtures exist partly as a fidelity target — the canvas is supposed
+to be able to draw the shapes in that article. Nothing currently checks that
+claim visually.
+
+**Context:** Deliberately *not* urgent, because `tests/dom-shim.mjs` already
+executes the real client script in Node, and the canvas suite asserts node
+geometry, group boxes, detail lines, and edge-label midpoints against
+hand-derived values. Screenshots would add pixels for a human to eyeball and
+almost nothing else. Doing it needs a headless browser, which would be this
+repo's first dependency of any kind, so it should sit behind an env flag and stay
+out of `npm test`. If it is built: a missing golden must **fail**, never
+silently bootstrap itself — a self-creating golden asserts nothing on the run
+that matters.
+
+**Blocked by:** A decision to accept a browser dependency, even an optional one.

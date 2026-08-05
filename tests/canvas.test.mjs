@@ -2,16 +2,7 @@ import { normalizeManifest } from "../extensions/workflow-factory-canvas/manifes
 import { projectRun } from "../extensions/workflow-factory-canvas/projection.mjs";
 import { renderHtml, CLIENT_JS } from "../extensions/workflow-factory-canvas/renderer.mjs";
 import { runClient } from "./dom-shim.mjs";
-
-let failures = 0;
-function check(name, cond, extra) {
-    if (cond) {
-        console.log(`  ok   ${name}`);
-    } else {
-        failures++;
-        console.log(`  FAIL ${name}${extra ? ` -- ${JSON.stringify(extra)}` : ""}`);
-    }
-}
+import { check, summary } from "./_check.mjs";
 
 // ---------------------------------------------------------------- manifest
 console.log("\n== manifest: happy path");
@@ -298,5 +289,173 @@ for (const [status, expected] of [["halted", "halted"], ["cancelled", "cancelled
     check("no agents counted live", v.liveAgentCount === 0, v.liveAgentCount);
 }
 
-console.log(`\n${failures === 0 ? "ALL PASS" : failures + " FAILURE(S)"}`);
-process.exit(failures === 0 ? 0 : 1);
+// ------------------------------------------------ shapes, groups, edge labels
+// These are the article-fidelity features: node shapes, container groups, node
+// subtitles, and labelled branch edges. All four are additive -- a manifest
+// that uses none of them must render exactly as before.
+console.log("\n== renderer: shapes, groups, detail lines, edge labels");
+
+// Mirrors renderer.mjs's NODE_W. Kept local so the assertions read as geometry
+// rather than magic numbers; if the renderer constant moves, these fail loudly.
+const NODE_W_TEST = 210;
+
+const rich = normalizeManifest({
+    factoryName: "rich-demo",
+    phases: [
+        { id: "intake", title: "Intake" },
+        { id: "decide", title: "Decide" },
+        { id: "act", title: "Act" },
+    ],
+    nodes: [
+        { id: "read", label: "Read inbox", phaseId: "intake", kind: "input", detail: "streams raw messages", groupId: "quarantine" },
+        { id: "gate", label: "New findings?", phaseId: "decide", kind: "gate", groupId: "quarantine" },
+        // kind is free-form, so an author can write a string that collides with
+        // a state class name. It must not paint the node as succeeded.
+        { id: "spoof", label: "Spoofed kind", phaseId: "decide", kind: "state-succeeded" },
+        { id: "fix", label: "Apply fix", phaseId: "act", kind: "terminal", groupId: "trusted" },
+    ],
+    edges: [
+        { from: "read", to: "gate", label: "raw batch" },
+        { from: "gate", to: "fix", label: "no -- done" },
+        // Backward edge: the Loop-Until-Done shape.
+        { from: "gate", to: "read", label: "yes -- spawn another" },
+        // No label: must not emit a text element at all.
+        { from: "read", to: "fix" },
+        { from: "spoof", to: "fix", label: "this label is far too long to fit inside one column" },
+    ],
+    groups: [
+        { id: "quarantine", title: "Quarantine", detail: "untrusted input" },
+        { id: "trusted", title: "Trusted" },
+    ],
+});
+check("rich manifest normalizes clean", rich.errors.length === 0, rich.errors);
+check("both groups survive", rich.manifest.groups.length === 2, rich.manifest.groups);
+
+const richView = projectRun(rich.manifest, null, {});
+check("view carries groups with resolved members", richView.groups.length === 2, richView.groups);
+check("group membership resolved from node.groupId",
+    richView.groups.find((g) => g.id === "quarantine")?.nodeIds.join(",") === "read,gate",
+    richView.groups);
+check("view carries node detail", richView.nodes.find((n) => n.id === "read").detail === "streams raw messages");
+check("view carries edge labels", richView.edges.filter((e) => e.label).length === 4, richView.edges);
+
+const rc = runClient(CLIENT_JS);
+rc.render(richView);
+const rg = rc.doc.getElementById("graph");
+
+function collect(root, pred) {
+    const out = [];
+    root.walk((n) => { if (pred(n)) out.push(n); });
+    return out;
+}
+const px = (v) => parseFloat(String(v).replace("px", ""));
+
+// -- node shapes
+check("shape: input applied", rg.countByClass("shape-input") === 1, rg.countByClass("shape-input"));
+check("shape: gate applied", rg.countByClass("shape-gate") === 1);
+check("shape: terminal applied", rg.countByClass("shape-terminal") === 1);
+check("shape: unknown kind gets no shape class",
+    collect(rg, (n) => n.className && n.className.includes("shape-")).length === 3,
+    collect(rg, (n) => n.className && n.className.includes("shape-")).map((n) => n.className));
+// The spoof guard: kind "state-succeeded" must not leak into state styling.
+check("shape: kind cannot spoof a state class", rg.countByClass("state-succeeded") === 0);
+check("shape: kind cannot spoof via prefixed class", rg.countByClass("shape-state-succeeded") === 0);
+
+// -- detail line and variable height
+const boxes = collect(rg, (n) => n.classList && n.classList.contains("node"));
+const boxOf = (label) => boxes.find((b) => b.textContent.includes(label));
+check("detail: rendered for the node that has one", rg.countByClass("detail") === 1, rg.countByClass("detail"));
+check("detail: node with a subtitle is taller", px(boxOf("Read inbox").style.height) === 76, boxOf("Read inbox").style.height);
+check("detail: node without one keeps base height", px(boxOf("New findings?").style.height) === 58, boxOf("New findings?").style.height);
+// A taller node must push its column-mates down, or they overlap.
+check("detail: stacking accounts for the taller box",
+    px(boxOf("Spoofed kind").style.top) === 102, boxOf("Spoofed kind").style.top);
+
+// -- edge labels
+const labels = collect(rg, (n) => n.classList && n.classList.contains("edge-label"));
+check("edge label: one per labelled edge, none for the bare edge", labels.length === 4, labels.length);
+const labelAt = (text) => labels.find((l) => l.textContent.startsWith(text));
+// Forward edge: the control-point offsets cancel, so the midpoint is the plain
+// average of the endpoints -- read right edge 210, gate left edge 282.
+check("edge label: forward sits between the columns", px(labelAt("raw batch").getAttribute("x")) === 246,
+    labelAt("raw batch").getAttribute("x"));
+// Backward edge: both control points sit out at the bow, dragging the midpoint
+// far right. Using the forward formula here would put it at 246 -- on top of
+// the nodes -- so this value is the whole point of the per-branch math.
+const backX = px(labelAt("yes").getAttribute("x"));
+check("edge label: backward uses the bowed midpoint", backX === 482.25, backX);
+check("edge label: backward clears the target node", backX > 210, backX);
+check("edge label: backward is not the endpoint average", backX !== 246, backX);
+// Truncation: the schema allows 120 chars, far wider than a 210px column.
+// Assert on ownText, not textContent -- the label now carries an SVG <title>
+// child holding the untruncated value, which contributes to textContent but is
+// never painted.
+const longLabel = labels.find((l) => l.ownText.startsWith("this label"));
+check("edge label: long label truncated", longLabel.ownText.length === 28, longLabel.ownText);
+check(
+    "edge label: truncation is marked with an ellipsis",
+    longLabel.ownText.endsWith("\u2026"),
+    longLabel.ownText
+);
+// Truncation must not destroy information: the full branch condition has to
+// remain recoverable via the accessible name and the hover tooltip.
+const longTitle = longLabel.children.find((c) => c.tagName === "TITLE");
+check(
+    "edge label: full text preserved in a <title>",
+    longTitle?.textContent === "this label is far too long to fit inside one column",
+    longTitle?.textContent
+);
+check(
+    "edge label: full text preserved as an accessible name",
+    longLabel.getAttribute("aria-label") === "this label is far too long to fit inside one column",
+    longLabel.getAttribute("aria-label")
+);
+
+// -- container groups
+check("group: one box per group", rg.countByClass("group-box") === 2, rg.countByClass("group-box"));
+check("group: one label per group", rg.countByClass("group-label") === 2);
+const gboxes = collect(rg, (n) => n.classList && n.classList.contains("group-box"));
+const spanning = gboxes.find((b) => px(b.style.width) > NODE_W_TEST * 2);
+check("group: spans multiple phase columns", !!spanning, gboxes.map((b) => b.style.width));
+check("group: box never starts off-canvas", gboxes.every((b) => px(b.style.left) >= 0), gboxes.map((b) => b.style.left));
+check("group: box never starts above the canvas", gboxes.every((b) => px(b.style.top) >= 0), gboxes.map((b) => b.style.top));
+// A group box hanging past the last node must extend the canvas, not get clipped.
+const gWidth = px(rg.style.width), gHeight = px(rg.style.height);
+check("group: canvas widened to contain the boxes",
+    gboxes.every((b) => px(b.style.left) + px(b.style.width) <= gWidth), { gWidth, gboxes: gboxes.map((b) => b.style.width) });
+check("group: canvas tall enough to contain the boxes",
+    gboxes.every((b) => px(b.style.top) + px(b.style.height) <= gHeight), gHeight);
+
+// A group whose members all vanish must not render a stray rectangle.
+const emptyGroup = normalizeManifest({
+    factoryName: "empty-group",
+    nodes: [{ id: "a", label: "A" }],
+    groups: [{ id: "ghost", title: "Ghost" }],
+});
+check("group: zero-member group dropped with a warning",
+    emptyGroup.manifest.groups.length === 0 && emptyGroup.warnings.some((w) => w.includes("ghost")),
+    emptyGroup.warnings);
+
+// A node pointing at a group that does not exist is an error, but the node
+// itself must survive -- a bad box must not delete work from the graph.
+const badGroupRef = normalizeManifest({
+    factoryName: "bad-group-ref",
+    nodes: [{ id: "a", label: "A", groupId: "nope" }],
+});
+check("group: dangling groupId errors but keeps the node",
+    badGroupRef.errors.length === 1 && badGroupRef.manifest.nodes.length === 1,
+    { errors: badGroupRef.errors, nodes: badGroupRef.manifest.nodes });
+check("group: dangling groupId is cleared", badGroupRef.manifest.nodes[0].groupId === null);
+
+// Regression guard: a manifest using none of the new features must render
+// exactly as it did before they existed.
+const plainView = projectRun(good.manifest, null, {});
+const pc = runClient(CLIENT_JS);
+pc.render(plainView);
+const pg = pc.doc.getElementById("graph");
+check("additive: no shapes without kinds", collect(pg, (n) => n.className && n.className.includes("shape-")).length === 0);
+check("additive: no group boxes without groups", pg.countByClass("group-box") === 0);
+check("additive: no detail lines without details", pg.countByClass("detail") === 0);
+check("additive: no edge labels without labels", pg.countByClass("edge-label") === 0);
+
+summary();

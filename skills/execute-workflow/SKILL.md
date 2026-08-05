@@ -32,8 +32,22 @@ factories_manage({ operation: "runs" })
 ```
 
 This is not optional. A run that hit a limit keeps its ID, arguments, journal,
-and accounting. **Resuming replays completed work for free; restarting pays for
-all of it a second time.** Skipping this step is how a run silently costs double.
+and accounting, so resuming is normally much cheaper than restarting.
+
+Two things about resume that are easy to get wrong, both verified against real
+runs:
+
+- **Resume only replays work the factory wrapped in `ctx.step`.** The journal is
+  keyed by `step` key and nothing else. A factory that fans out with a bare
+  `agent()`/`parallel()` has an empty journal, so a resume re-runs every agent
+  and re-pays for all of it. Check the run's `snapshot.journal` — if it is `[]`,
+  a resume is a restart with extra steps, and the fix belongs in the factory
+  (`plan-workflow`), not here.
+- **Consumed resources carry across attempts.** A raised limit is measured
+  against *cumulative* spend, not the next attempt alone. Bumping
+  `maxAiCredits` from 2 to 12 does not buy 12 more credits — it buys whatever
+  is left under 12. Raise it past total expected spend, or the next attempt
+  breaches immediately and you have paid for a third of nothing.
 
 Read each candidate's status:
 
@@ -156,6 +170,8 @@ turning the run's result into the answer, edit, or file they actually wanted.
 | Symptom | Cause |
 | --- | --- |
 | Run costs double | Skipped step 2 and restarted instead of resuming |
+| Resume re-ran everything anyway | Factory never used `ctx.step`, so the journal was empty |
+| Resume breaches the limit instantly | Raised the ceiling by too little; prior attempts' spend still counts |
 | `already_active` rejection | A second run started while one was live |
 | Graph never lights up | Attached the wrong `instanceId`, or labels don't match the manifest |
 | Nodes appear as `unmapped` | The factory spawned labels the manifest didn't declare — expected for runtime-sized fan-outs |

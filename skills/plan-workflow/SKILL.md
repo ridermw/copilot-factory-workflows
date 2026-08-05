@@ -76,6 +76,30 @@ if (!files.length) throw new Error("plan-workflow: args.files must be a non-empt
 
 - **`log()` every self-imposed cap.** Top-N, sampling, or no-retry rules must be
   visible in progress, not silent.
+- **Wrap expensive stages in `ctx.step` or the run is not really resumable.**
+  Resume replays the journal, and the journal contains *only* `step` results.
+  A fan-out written as a bare `parallel(...)` of `agent()` calls journals
+  nothing, so a run that breaches a limit re-runs and re-pays for every agent on
+  resume. Journal at the coarsest stable boundary — one `step` per stage, or per
+  item if items are independent:
+
+```js
+const findings = await step("inspect-v1", async () =>
+    (await parallel(files.map((f) => () => agent("...", { label: "inspect:" + f })))).filter((v) => v !== null)
+);
+```
+
+  The key is the *sole* identity — not the body, not the inputs. Version it
+  (`"inspect-v2"`) whenever the meaning changes, or a resume will happily replay
+  a stale result for new inputs. Journalled producers are at-least-once, so keep
+  side effects idempotent.
+- **Declare limits as a real ceiling, not a token one.** A single subagent turn
+  costs well into double-digit AI credits, so `maxAiCredits: 5` does not buy one
+  agent — it buys an immediate `factory_limit_reached`. Size the budget against
+  the expected number of agent turns, and remember that on resume the ceiling is
+  measured against *cumulative* spend across all attempts. Always declare
+  `maxConcurrentSubagents`: with neither it nor `maxTotalSubagents` set there is
+  no concurrency cap at all.
 
 ### 5. Generate the display manifest from the same design
 
@@ -156,7 +180,7 @@ No `run_factory`. Not "just to check". The user approves the shape first.
   "name": "review-change",
   "description": "Review a change across dimensions and verify each finding. args: { files: string[] }",
   "phases": [{ "title": "Inspect" }, { "title": "Verify" }],
-  "limits": { "maxConcurrentSubagents": 4, "maxTotalSubagents": 40, "maxAiCredits": 5 }
+  "limits": { "maxConcurrentSubagents": 4, "maxTotalSubagents": 40, "maxAiCredits": 600 }
 }
 ```
 

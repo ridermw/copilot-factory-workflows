@@ -409,6 +409,7 @@ const canvas = createCanvas({
                     currentPhase: v.currentPhase,
                     terminal: v.terminal,
                     errors: v.errors,
+                    warnings: v.warnings,
                     runError: v.runError,
                     nodes: v.nodes.map((n) => ({
                         id: n.id,

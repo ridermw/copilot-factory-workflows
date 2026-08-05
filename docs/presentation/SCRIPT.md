@@ -9,7 +9,7 @@ numbers, cues and script always match what is on screen.
 Open the deck and press **N** for notes, or **S** for the presenter console, which
 shows both alongside a live preview and a timer.
 
-Spoken length: **4159 words** across 27 slides — about 20 minutes at a brisk
+Spoken length: **4224 words** across 27 slides — about 20 minutes at a brisk
 conversational pace.
 
 ---
@@ -262,7 +262,7 @@ That is the real argument for the adversarial reviewer. Not that it catches more
 
 ---
 
-## 20 · A loop is not better because it never asks: it is better when the questions are
+## 20 · A loop is not better because it never asks: it is better when the questions are worth asking
 
 **Your cue.** This answers the obvious objection - if the loop runs without me, when does it come back? Nate Jones' framing. Land the distinction: the bad question makes you the context store; the good question hands you a decision only you can make.
 
@@ -338,9 +338,9 @@ That is an illustrative shape, not a proposal. A real one needs a name, an owner
 
 So let me make this concrete, because everything I have described is available to you right now with nothing installed beyond the CLI itself.
 
-Discovery is a cron schedule. Handoff is copilot dash p, which takes one prompt, runs non-interactively, and exits. Verification is your existing test suite, and it returns an exit code rather than an opinion. Persistence is a pull request, or just a file on disk. And scheduling is the part that makes it turn again tomorrow.
+Discovery is a query over a signal you already collect - your issue tracker, your alerts, a saved search - so the loop finds the work instead of being handed it. Handoff is copilot dash p, which takes one prompt, runs non-interactively, and exits. Verification is your existing test suite, and it returns an exit code rather than an opinion. Persistence is a pull request, or just a file on disk. And scheduling is the cron schedule, the part that makes it turn again tomorrow.
 
-The command on the left is the one I would actually demo. Slash review invokes the built-in code review agent against your branch. That is the separate-reviewer recommendation from earlier, already shipped, one command, no setup. The dash s flag gives clean output, and allow-tool scopes it to git and nothing else.
+The command on the left is the one I would actually demo. Slash review invokes the built-in code review agent against your branch. That is the separate-reviewer recommendation from earlier, already shipped, one command, no setup. The dash s flag gives clean output, and the allow-tool flag pre-approves git commands so the run does not stop to ask. Be precise about that one: allow-tool grants permission, it does not restrict what else the agent can reach - if you want a true allowlist, the flag is available-tools.
 
 On the right, two ways to make it repeat. Inside an interactive session, slash every one hour - that is experimental, so turn experimental on first. Or from any external scheduler, cron on your laptop or a scheduled Actions workflow, using dash p with no-ask-user so it never blocks waiting for a human.
 
@@ -372,7 +372,7 @@ One: pick the manual follow-up you did most often this week. That repeated step 
 
 Two: write the check first, and prove it fails. Run it against deliberately broken input before you point an agent at it. If it passes broken input, you do not have a check, you have a green light.
 
-Three: put the critique in a different agent. Start with slash review - it costs nothing and it is already there.
+Three: put the critique in a different agent. Start with slash review - it needs no setup and it is already there.
 
 If you want the graph as well, the plugin is one clone and one flag, and npm test runs from a clean checkout with no dependencies.
 

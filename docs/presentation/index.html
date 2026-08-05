@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Loop Engineering — Building the System That Prompts the Agent</title>
+<script>
+  (() => {
+    const param = new URLSearchParams(window.location.search).get("clawpilotTheme");
+    const theme =
+      param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+
+/*
+  Tone system, derived from the --cp-* palette.
+  Two variants per hue, because the job is different:
+    --tone-*      vivid, for 1.5px borders and rules (UI components need 3:1, met on every surface)
+    --tone-*-ink  darkened/lightened, for TEXT (verified >= 4.5:1 on --cp-bg, --cp-surface and --cp-surface-soft)
+  The vivid values fail badly as text in light mode (amber lands at 1.96:1), so text never uses them.
+*/
+:root {
+  --tone-a: var(--cp-link);      --tone-a-ink: #0b62ab;   /* 5.71:1 on --cp-bg */
+  --tone-b: var(--cp-success);   --tone-b-ink: #0f6b32;   /* 6.04:1 */
+  --tone-c: var(--cp-warning);   --tone-c-ink: #8a5300;   /* 5.77:1 */
+  --tone-d: var(--cp-accent);    --tone-d-ink: #b11f4b;   /* 6.04:1 */
+  --tone-x: var(--cp-danger);    --tone-x-ink: #b81d1d;   /* 5.92:1 */
+  --cp-danger-soft: rgba(220, 38, 38, 0.10);
+  --cp-success-soft: rgba(22, 163, 74, 0.10);
+}
+html[data-theme="dark"] {
+  --tone-a-ink: #7cc0ff;   /* 5.75:1 on --cp-bg */
+  --tone-b-ink: #4ade80;   /* 6.39:1 */
+  --tone-c-ink: #fbbf24;   /* 6.67:1 */
+  --tone-d-ink: #fd8ea1;   /* 5.07:1 */
+  --tone-x-ink: #fca5a5;   /* 5.87:1 */
+  --cp-danger-soft: rgba(248, 113, 113, 0.16);
+  --cp-success-soft: rgba(74, 222, 128, 0.14);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--cp-bg);
+  color: var(--cp-text);
+  font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre { font-family: Consolas, "Courier New", Courier, monospace; }
+
+/* Semantic z-index scale */
+:root { --z-bar: 10; --z-notes: 20; --z-hud: 30; }
+
+#deck { position: relative; height: 100vh; width: 100vw; overflow: hidden; }
+
+.slide {
+  position: absolute; inset: 0;
+  display: none; flex-direction: column;
+  /* `safe` keeps tall slides from having their top clipped by centring */
+  justify-content: center;
+  justify-content: safe center;
+  padding: clamp(26px, 4.2vw, 76px) clamp(26px, 5.6vw, 116px) 88px;
+  overflow-y: auto;
+}
+.slide.active { display: flex; animation: fade .22s ease; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+h1 {
+  font-size: clamp(32px, 5vw, 72px); line-height: 1.04;
+  letter-spacing: -.025em; margin: 0 0 20px; font-weight: 700;
+  text-wrap: balance;
+}
+h2 {
+  font-size: clamp(24px, 3.1vw, 42px); line-height: 1.14;
+  letter-spacing: -.02em; margin: 0 0 26px; font-weight: 700; max-width: 21ch;
+  text-wrap: balance;
+}
+h2.wide { max-width: 34ch; }
+/*
+  Guidepost slides carry a real heading rather than a tracked-uppercase eyebrow:
+  it is small so the diagram stays the hero, but it is sentence case and semantic,
+  so heading navigation works and the deck is not wearing the same label on every slide.
+*/
+h2.dt {
+  font-size: clamp(15px, 1.5vw, 20px); font-weight: 700; letter-spacing: -.01em;
+  color: var(--cp-text-muted); max-width: 46ch; margin: 0 0 clamp(18px, 2.4vw, 34px);
+}
+h2.dt b { color: var(--cp-text); font-weight: 700; }
+h3 { font-size: clamp(14.5px, 1.3vw, 18px); margin: 0 0 8px; font-weight: 700; }
+
+p.lede {
+  font-size: clamp(16px, 1.7vw, 22px); line-height: 1.5;
+  color: var(--cp-text-muted); max-width: 62ch; margin: 0 0 16px; text-wrap: pretty;
+}
+p.sub {
+  font-size: clamp(13.5px, 1.2vw, 16.5px); line-height: 1.6;
+  color: var(--cp-text-soft); max-width: 70ch; margin: 0; text-wrap: pretty;
+}
+.rule { width: 64px; height: 4px; border-radius: 2px; background: var(--cp-accent); margin: 0 0 26px; }
+
+/* ---------- Shared diagram node ---------- */
+.node {
+  background: var(--cp-surface);
+  border: 1.5px solid var(--tone, var(--cp-border));
+  border-radius: 16px;
+  padding: clamp(14px, 1.5vw, 22px) clamp(16px, 1.7vw, 26px);
+  text-align: center;
+  box-shadow: 0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14);
+  flex: 1 1 0; min-width: 0;
+}
+.node .lbl {
+  display: block; font-size: clamp(10px, .88vw, 12px);
+  letter-spacing: .14em; text-transform: uppercase; font-weight: 700;
+  color: var(--tone-ink, var(--cp-text-muted)); margin-bottom: 8px;
+}
+.node .ttl {
+  display: block; font-size: clamp(17px, 2.1vw, 30px); font-weight: 700;
+  letter-spacing: -.02em; line-height: 1.15; color: var(--cp-text); margin-bottom: 6px;
+  text-wrap: balance;
+}
+.node .cap {
+  display: block; font-size: clamp(12px, 1.05vw, 14.5px);
+  font-weight: 600; color: var(--tone-ink, var(--cp-text-muted));
+}
+
+/* ---------- Flow: A -> B -> C ---------- */
+.flow { display: flex; align-items: stretch; gap: clamp(8px, 1.2vw, 18px); }
+.flow .arrow, .flow .op {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cp-text-muted); flex: 0 0 auto;
+}
+.flow .arrow { font-size: clamp(18px, 2vw, 28px); }
+.flow .op { font-size: clamp(20px, 2.2vw, 32px); font-weight: 300; }
+@media (max-width: 860px) {
+  .flow { flex-direction: column; }
+  .flow .arrow, .flow .op { transform: rotate(90deg); }
+}
+
+/* ---------- Versus ---------- */
+.versus { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: clamp(16px, 3vw, 48px); }
+.versus .vs { font-size: clamp(28px, 4.2vw, 56px); font-weight: 700; color: var(--cp-text-muted); letter-spacing: -.02em; }
+.versus .side { text-align: center; }
+.versus .side .bar { width: 62px; height: 4px; border-radius: 2px; background: var(--tone); margin: 0 auto 12px; }
+.versus .side .lbl { display: block; font-size: clamp(10.5px, .92vw, 12.5px); letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--tone-ink); margin-bottom: 8px; }
+.versus .side .ttl { display: block; font-size: clamp(24px, 3.6vw, 50px); font-weight: 700; letter-spacing: -.025em; line-height: 1.08; color: var(--cp-text); margin-bottom: 6px; text-wrap: balance; }
+.versus .side .cap { display: block; font-size: clamp(12.5px, 1.2vw, 16px); font-weight: 600; color: var(--tone-ink); }
+@media (max-width: 860px) { .versus { grid-template-columns: 1fr; } .versus .vs { text-align: center; } }
+
+/* ---------- Stack: layered rows ---------- */
+.stack { display: flex; flex-direction: column; gap: clamp(10px, 1.2vw, 16px); }
+.stack .row {
+  display: flex; align-items: center; gap: clamp(14px, 2vw, 28px);
+  background: var(--cp-surface); border: 1.5px solid var(--tone, var(--cp-border));
+  border-radius: 16px; padding: clamp(12px, 1.5vw, 22px) clamp(16px, 2vw, 30px);
+  box-shadow: 0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14);
+}
+.stack .row .lbl {
+  flex: 0 0 clamp(76px, 9vw, 116px);
+  font-size: clamp(10.5px, .92vw, 12.5px); letter-spacing: .14em; text-transform: uppercase;
+  font-weight: 700; color: var(--tone-ink, var(--cp-text-muted));
+  border-right: 1px solid var(--cp-border); padding-right: clamp(10px, 1.4vw, 20px);
+}
+.stack .row .body .ttl { font-size: clamp(19px, 2.5vw, 34px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.stack .row .body .cap { font-size: clamp(12.5px, 1.15vw, 15.5px); font-weight: 600; color: var(--tone-ink, var(--cp-text-muted)); margin-top: 4px; }
+.stack .row.i2 { margin-right: clamp(0px, 6vw, 90px); }
+.stack .row.i3 { margin-right: clamp(0px, 12vw, 180px); }
+@media (max-width: 860px) { .stack .row.i2, .stack .row.i3 { margin-right: 0; } }
+
+/* ---------- Hero + children ---------- */
+.hero { margin-bottom: clamp(10px, 1.4vw, 18px); }
+.hero .node { text-align: left; padding: clamp(18px, 2.2vw, 34px) clamp(20px, 2.4vw, 38px); }
+.hero .node .ttl { font-size: clamp(28px, 4vw, 54px); }
+.kids { display: flex; gap: clamp(10px, 1.3vw, 18px); }
+@media (max-width: 860px) { .kids { flex-direction: column; } }
+
+/* ---------- Caption bar ---------- */
+.capbar {
+  align-self: center; margin-top: clamp(18px, 2.6vw, 38px);
+  background: var(--cp-surface); border: 1px solid var(--cp-border);
+  border-radius: 16px; padding: clamp(11px, 1.3vw, 18px) clamp(18px, 2.4vw, 34px);
+  font-size: clamp(15px, 1.75vw, 23px); font-weight: 700; letter-spacing: -.01em;
+  color: var(--cp-text); text-align: center; text-wrap: balance;
+  box-shadow: 0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14);
+}
+.capbar em { font-style: normal; color: var(--tone-c-ink); }
+
+/* ---------- Generic content ---------- */
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+@media (max-width: 900px) { .g2, .g3, .g4 { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--cp-surface); border: 1px solid var(--cp-border);
+  border-radius: 16px; padding: clamp(15px, 1.5vw, 22px);
+  box-shadow: 0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14);
+}
+.card .num { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; color: var(--cp-accent); margin-bottom: 9px; display: block; }
+.card p { margin: 0; font-size: clamp(13px, 1.1vw, 15px); line-height: 1.55; color: var(--cp-text-muted); text-wrap: pretty; }
+/* Accent card is marked by its border, not a translucent fill: in dark mode the tint
+   lifted the surface to rgb(88,71,72) and dropped muted body text to 2.78:1. */
+.card.accent { border: 1.5px solid var(--cp-accent); background: var(--cp-surface); }
+.card strong { color: var(--cp-text); }
+
+ul.bullets { margin: 0; padding: 0; list-style: none; max-width: 66ch; }
+ul.bullets li {
+  position: relative; padding-left: 28px; margin-bottom: 14px;
+  font-size: clamp(14.5px, 1.4vw, 19px); line-height: 1.5; color: var(--cp-text-muted); text-wrap: pretty;
+}
+ul.bullets li::before { content: ""; position: absolute; left: 4px; top: .6em; width: 8px; height: 8px; border-radius: 50%; background: var(--cp-accent); }
+ul.bullets li strong { color: var(--cp-text); font-weight: 700; }
+
+/* Pull quote: no side stripe. The type does the work. */
+.quote {
+  font-size: clamp(24px, 3.4vw, 46px); line-height: 1.16; font-weight: 700;
+  letter-spacing: -.03em; max-width: 22ch; margin: 0 0 14px;
+  color: var(--cp-text); text-wrap: balance;
+}
+.quote .mark { color: var(--cp-accent); }
+.attrib { font-size: 13px; color: var(--cp-text-soft); }
+
+table.tbl {
+  width: 100%; border-collapse: collapse; font-size: clamp(12.5px, 1.1vw, 15px);
+  background: var(--cp-surface); border: 1px solid var(--cp-border);
+  border-radius: 16px; overflow: hidden;
+}
+table.tbl th {
+  text-align: left; padding: 11px 15px; background: var(--cp-surface-soft);
+  border-bottom: 1px solid var(--cp-border); font-size: 11.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--cp-text-muted); font-weight: 700;
+}
+table.tbl td { padding: 11px 15px; border-bottom: 1px solid var(--cp-border); color: var(--cp-text-muted); vertical-align: top; }
+table.tbl tr:last-child td { border-bottom: none; }
+table.tbl td.k { color: var(--cp-text); font-weight: 600; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.panel { border-radius: 16px; padding: clamp(15px, 1.6vw, 24px); border: 1px solid var(--cp-border); background: var(--cp-surface); }
+.panel .tag {
+  display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; padding: 4px 10px; border-radius: 10px; margin-bottom: 12px;
+}
+.tag.bad { background: var(--cp-danger-soft); color: var(--tone-x-ink); }
+.tag.good { background: var(--cp-success-soft); color: var(--tone-b-ink); }
+
+pre.prompt {
+  margin: 0; padding: 15px 17px; background: var(--cp-surface-soft);
+  border: 1px solid var(--cp-border); border-radius: 10px;
+  font-size: clamp(11px, .95vw, 13.5px); line-height: 1.6; color: var(--cp-text); white-space: pre-wrap;
+}
+a { color: var(--cp-link); }
+
+/* ---------- Chrome ---------- */
+#bar { position: fixed; left: 0; bottom: 0; height: 3px; background: var(--cp-accent); z-index: var(--z-bar); }
+#hud {
+  position: fixed; right: 20px; bottom: 18px; z-index: var(--z-hud);
+  display: flex; align-items: center; gap: 6px;
+  background: var(--cp-panel-strong);
+  border: 1px solid var(--cp-border); border-radius: 10px; padding: 6px 8px;
+  box-shadow: 0 0 2px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.14);
+}
+#hud button {
+  border: none; background: transparent; color: var(--cp-text-muted);
+  font-family: inherit; font-size: 13px; font-weight: 600; padding: 5px 11px;
+  border-radius: 10px; cursor: pointer;
+}
+#hud button:hover { background: var(--cp-accent-soft); color: var(--cp-accent); }
+#hud button[aria-pressed="true"] { background: var(--cp-accent); color: var(--cp-accent-fg); }
+#counter { font-size: 12.5px; color: var(--cp-text-muted); padding: 0 6px; min-width: 54px; text-align: center; font-variant-numeric: tabular-nums; }
+
+:where(a, button):focus-visible {
+  outline: 2px solid var(--cp-accent);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+#notes {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-notes);
+  max-height: 54vh; overflow-y: auto;
+  background: var(--cp-panel-strong);
+  border-top: 1px solid var(--cp-border);
+  padding: 18px clamp(24px, 5vw, 64px) 62px; display: none;
+}
+#notes.on { display: block; }
+#notes h2 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--cp-accent); margin: 0 0 8px; max-width: none; }
+#notes p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--cp-text-muted); max-width: 90ch; }
+#notes #scriptHead { margin-top: 16px; }
+#scriptText p { color: var(--cp-text); font-size: 15.5px; margin-bottom: 10px; }
+#scriptText p:last-child { margin-bottom: 0; }
+#help {
+  position: fixed; left: 20px; bottom: 20px; z-index: var(--z-hud); font-size: 12px; color: var(--cp-text-muted);
+  background: var(--cp-panel-strong); border: 1px solid var(--cp-border); border-radius: 10px; padding: 7px 14px;
+}
+/* The help bar is hidden on small screens, so the slide can reclaim its clearance */
+@media (max-width: 720px) {
+  #help { display: none; }
+  .slide { padding-bottom: 70px; }
+}
+
+/* ---------- Presenter console (?view=presenter) ---------- */
+#presenter { display: none; }
+body.presenter { overflow: hidden; }
+body.presenter #bar, body.presenter #hud, body.presenter #help, body.presenter #notes { display: none !important; }
+/* while a presenter console is attached, the projected window stays clean */
+body.projecting #hud, body.projecting #help { display: none !important; }
+
+body.presenter #presenter {
+  display: grid; grid-template-rows: auto 1fr; gap: 14px;
+  position: fixed; inset: 0; padding: 16px clamp(16px, 2vw, 28px) 18px;
+  background: var(--cp-bg); z-index: var(--z-hud);
+}
+.pbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pbar .pcount { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.pbar .ptime {
+  font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--cp-accent); letter-spacing: -.02em;
+}
+.pbar .pspacer { flex: 1 1 auto; }
+.pbar button {
+  font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 8px 14px; border-radius: 10px;
+  border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text);
+}
+.pbar button:hover { border-color: var(--cp-accent); color: var(--cp-accent); }
+.pbar button[aria-pressed="true"] { background: var(--cp-accent); color: var(--cp-accent-fg); border-color: var(--cp-accent); }
+
+.pmain { display: grid; grid-template-columns: minmax(0, 42%) minmax(0, 1fr); gap: clamp(14px, 1.8vw, 26px); min-height: 0; }
+@media (max-width: 1000px) { .pmain { grid-template-columns: 1fr; } }
+
+.pstage {
+  border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-surface-soft);
+  overflow: hidden; position: relative; width: 100%;
+}
+body.presenter #deck {
+  position: absolute; top: 0; left: 0;
+  width: 1280px; height: 720px; overflow: hidden;
+  transform-origin: top left;
+}
+body.presenter .slide { padding: 34px 46px; }
+
+.pnext {
+  margin-top: 12px; border: 1px solid var(--cp-border); border-radius: 12px;
+  background: var(--cp-surface); padding: 12px 16px;
+}
+.pnext .k { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--cp-text-muted); font-weight: 700; }
+.pnext .v { font-size: 16px; font-weight: 700; margin-top: 4px; line-height: 1.3; }
+
+.pnotes {
+  border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-surface);
+  padding: clamp(14px, 1.6vw, 22px); overflow-y: auto; min-height: 0;
+}
+.pnotes h2 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--cp-accent); margin: 0 0 8px; max-width: none; }
+.pnotes h2.second { margin-top: 20px; }
+.pnotes .cue { font-size: clamp(15px, 1.15vw, 18px); line-height: 1.55; color: var(--cp-text-muted); margin: 0; }
+.pnotes .script p { font-size: clamp(16px, 1.3vw, 21px); line-height: 1.55; color: var(--cp-text); margin: 0 0 12px; }
+.pnotes .script p:last-child { margin-bottom: 0; }
+
+#blank { position: fixed; inset: 0; background: #000; z-index: 999; display: none; }
+body.blanked #blank { display: block; }
+body.presenter #blank { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide.active { animation: none; }
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+@media print {
+  /* Force the light palette so a presenter on a dark OS does not print 24 charcoal pages */
+  :root, html[data-theme="dark"] {
+    color-scheme: light;
+    --cp-bg: #ffffff; --cp-bg-elevated: #ffffff; --cp-surface: #ffffff; --cp-surface-soft: #f5f5f5;
+    --cp-border: #cfcfcf; --cp-text: #111111; --cp-text-muted: #333333; --cp-text-soft: #444444;
+    --cp-accent: #b11f4b; --cp-accent-soft: rgba(177,31,75,.08); --cp-accent-fg: #ffffff;
+    --cp-panel-strong: #ffffff;
+    --tone-a-ink: #0b62ab; --tone-b-ink: #0f6b32; --tone-c-ink: #8a5300;
+    --tone-d-ink: #b11f4b; --tone-x-ink: #b81d1d;
+    --cp-danger-soft: rgba(220,38,38,.10); --cp-success-soft: rgba(22,163,74,.10);
+  }
+  html, body { height: auto; background: #ffffff; }
+  /* Without this the fixed-height, overflow-hidden deck prints as a single page */
+  #deck { height: auto; width: auto; overflow: visible; position: static; }
+  #hud, #help, #bar, #notes { display: none !important; }
+  .slide {
+    display: flex !important; position: relative; inset: auto;
+    height: auto; min-height: 96vh; overflow: visible;
+    padding: 6vh 6vw; break-after: page; page-break-after: always; animation: none;
+  }
+  .slide:last-child { break-after: auto; page-break-after: auto; }
+  .node, .card, .panel, .capbar, .stack .row, table.tbl { box-shadow: none; }
+}
+
+/* AA fix for dark theme: muted body text was under 4.5:1. Verified by measurement. */
+html[data-theme="dark"] p.lede,
+html[data-theme="dark"] ul.bullets li,
+html[data-theme="dark"] table.tbl th { color: var(--cp-text-soft); }
+</style>
+</head>
+<body>
+
+<main id="deck">
+
+<!-- 1 · TITLE -->
+<section class="slide" data-notes="Credit the sources out loud before you start. Say the term is about six weeks old, so nobody feels behind. Frame the ask: twenty minutes, one idea, one thing to try this week." data-script="This is a talk about a term that did not exist two months ago, so if you have not heard it, you are not behind. I want to give you the vocabulary, the failure modes, and one thing you can build this week. Most of what is here comes from a field study on loop engineering, two Anthropic engineering write-ups, a first-party account of a very large migration, and four open source harnesses I read for this. Sources are on the last slide and every claim in here traces to one of them.">
+  <h1>Loop engineering</h1>
+  <div class="rule"></div>
+  <p class="lede">Building the system that prompts the agent, so you stop being the one who does.</p>
+  <p class="sub">Press <b>N</b> for speaker notes, arrow keys to advance.</p>
+</section>
+
+<!-- 2 · COLD OPEN -->
+<section class="slide" data-notes="Read the disclosure out loud - this room will find it anyway, and you get more credit for saying it first. Do not sell the speed. The interesting question is not how fast, it is how anyone dared merge it." data-script="I want to start with the largest example I could find that has real numbers attached.
+
+Bun is a JavaScript runtime. Five hundred and thirty-five thousand lines of Zig, across fourteen hundred files. One engineer rewrote all of it into Rust in eleven days, using about fifty dynamic workflows driving Claude Code. The result was a pull request with over a million lines added. Their own estimate for a team doing it by hand was a year.
+
+Disclosure, and I would rather say it than have you find it: Bun is owned by Anthropic, the engineer works there, and he used a pre-release model. He states that in the first line of the post. I am using it anyway, because unlike most claims in this space every number is published and checkable.
+
+And it shipped. Claude Code has been running on it since June - startup got ten percent faster and, in his words, barely anyone noticed. Boring is good. Prisma, who have no stake in any of this, tested it against the production failures that were breaking their own platform, found them fixed, and launched their public beta on it.
+
+Here is the question I actually want to spend the next twenty minutes on. It is not how you generate a million lines of code. We all know the answer to that now. It is: how did anyone review a million-line pull request and feel safe merging it?">
+  <h2 class="wide">One engineer rewrote 535,000 lines of Zig into Rust in eleven days</h2>
+  <div class="grid g3">
+    <div class="card"><span class="num">WHAT</span><p>Bun &mdash; a JavaScript runtime. 1,448 files, 535,496 lines of Zig. A <strong>+1,000,000 line</strong> pull request.</p></div>
+    <div class="card"><span class="num">HOW LONG</span><p>11 days. One engineer. About 50 dynamic workflows. Their own estimate for a team doing it by hand: <strong>a year</strong>.</p></div>
+    <div class="card accent"><span class="num">THE PART THAT SHOULD BOTHER YOU</span><p>It shipped. It runs Claude Code today. Startup got 10% faster and &ldquo;barely anyone noticed.&rdquo;</p></div>
+  </div>
+  <p class="sub" style="margin-top:22px; max-width:none"><strong>Independent check:</strong> Prisma tested the rewrite against the production failures breaking their own platform &mdash; a memory leak that OOM-killed containers, and a connection pool that silently died after resume. Both fixed. They launched their public beta on it.</p>
+  <p class="sub" style="margin-top:12px; max-width:none; font-style:italic"><strong>Disclosure, theirs and mine:</strong> Bun is owned by Anthropic, the author works there, and he used a pre-release model. Every number here is published and checkable, which is why I am using it.</p>
+</section>
+
+<!-- 3 · THE ANSWER -->
+<section class="slide" data-notes="This is the whole deck on one slide. Say that. Everything after is these three in more detail, plus what it costs you when you skip them." data-script="He answers it in one sentence, and that sentence is the entire talk, so I will read it exactly.
+
+A language-independent test suite with a million assertions, adversarial code review, and - when something does go wrong - fixing the process that generates the code instead of hand-fixing the code.
+
+Three disciplines. A judge that does not care who wrote the code. A reviewer whose job is to make it fail. And when you find a defect, you repair the thing that produced it rather than the thing it produced.
+
+Notice what is not on that list. A better model. Every one of these is a property of the system around the model, and all three are things you could build this quarter. Everything after this is one of the three in more detail, plus what it costs you when you skip them.">
+  <h2 class="dt">The answer, in one sentence: <b>&ldquo;How do you review a PR with +1 million lines added?&rdquo;</b></h2>
+  <div class="hero">
+    <div class="node" style="--tone: var(--tone-d); --tone-ink: var(--tone-d-ink)"><span class="lbl">The answer</span><span class="ttl">A test suite, adversarial review, and fixing the process</span><span class="cap">&ldquo;...instead of hand-fixing the code&rdquo;</span></div>
+  </div>
+  <div class="kids">
+    <div class="node" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><span class="lbl">Judge</span><span class="ttl">Language-independent</span><span class="cap">does not care who wrote it</span></div>
+    <div class="node" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><span class="lbl">Review</span><span class="ttl">Adversarial</span><span class="cap">wants it to fail</span></div>
+    <div class="node" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><span class="lbl">Repair</span><span class="ttl">Fix the process</span><span class="cap">not the output</span></div>
+  </div>
+  <p class="capbar">Three disciplines. None of them is <em>a better model</em></p>
+</section>
+
+<!-- 4 · THE TERM -->
+<section class="slide" data-notes="Read the quote verbatim. The weight is on replacing oneself. Pause after it." data-script="The definition is one sentence: loop engineering is replacing yourself as the person who prompts the agent, and designing the system that does it instead.
+
+The weight of that sentence is on replacing yourself. Every other term we have been handed in the last two years - prompt engineering, context engineering, harness engineering - assumes a human at the keyboard, directing the agent line by line, and tries to make that human better at it. This one deletes the assumption. You are not in the loop. You are outside it, building the loop.">
+  <h2>The term is six weeks old and it has a specific meaning</h2>
+  <p class="quote" style="max-width: min(980px, 92%)"><span class="mark">&ldquo;</span>Loop engineering is replacing oneself as the person who prompts the agent, and designing the system that does it instead.</p>
+  <p class="attrib">Addy Osmani, Google Chrome</p>
+  <ul class="bullets" style="margin-top:18px">
+    <li>Surfaced independently in <strong>June 2026</strong> by Steinberger, Cherny and Osmani.</li>
+    <li>The earlier terms teach you to <strong>do the work better</strong>. This one removes you from <strong>doing the work at all</strong>.</li>
+  </ul>
+</section>
+
+<!-- 5 · FOUR FLOORS -->
+<section class="slide" data-notes="This is the orientation slide. Most of the room lives on floors one to three. Do not disparage those floors - floor four sits on top of them." data-script="It helps to see it as a fourth floor. Prompt engineering is one message. Context engineering is what the model can see when it answers. Harness engineering is the tools, the memory, the guardrails around it - that is where most serious agent work in this company lives today, and it is real work.
+
+Loop engineering is the floor above: who decides the agent should run at all, and what happens to the output afterwards. You still need the three floors underneath. Nothing here replaces them.">
+  <h2 class="dt">Four floors: <b>each one moves you from doing to designing</b></h2>
+  <div class="stack">
+    <div class="row i1" style="--tone: var(--tone-d); --tone-ink: var(--tone-d-ink)"><div class="lbl">Loop</div><div class="body"><div class="ttl">Who decides to run it</div><div class="cap">and what happens after</div></div></div>
+    <div class="row i2" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><div class="lbl">Harness</div><div class="body"><div class="ttl">Tools, memory, guardrails</div><div class="cap">where most work lives</div></div></div>
+    <div class="row i3" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><div class="lbl">Context</div><div class="body"><div class="ttl">What it can see</div><div class="cap">retrieval, files, history</div></div></div>
+    <div class="row i3" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink); margin-right: clamp(0px, 18vw, 270px)"><div class="lbl">Prompt</div><div class="body"><div class="ttl">One message</div><div class="cap">the instruction itself</div></div></div>
+  </div>
+  <p class="sub" style="margin-top:18px; text-align:center">You still need the floors underneath. Nothing here <strong>replaces</strong> them.</p>
+</section>
+
+<!-- 6 · SHIFT PROBLEM -->
+<section class="slide" data-notes="The shift metaphor is the best explanatory image in the whole deck. Say it slowly. Everyone in this room has inherited a half-finished handover." data-script="Why does that floor need to exist at all? Because of a constraint that is structural, not a capability problem.
+
+Agents work in discrete sessions, and each one starts with no memory of what came before. Anthropic&#x27;s framing is a software project staffed by engineers working in shifts, where every new engineer arrives remembering nothing about the last shift. You have all inherited that handover.
+
+It produces two failures. The first is one-shotting - the agent tries to do the whole thing at once, runs out of context halfway through a feature, and the next session inherits something half-built and undocumented. The second is worse and shows up later: a session looks around, sees that a lot of progress has been made, and declares the job finished.
+
+And compaction does not save you. Summarizing the conversation in place keeps continuity, but it does not reliably hand the next agent clear instructions.">
+  <h2 class="wide">Every shift starts with amnesia</h2>
+  <p class="quote" style="max-width: min(1020px, 92%)"><span class="mark">&ldquo;</span>Imagine a software project staffed by engineers working in shifts, where each new engineer arrives with no memory of what happened on the previous shift.</p>
+  <div class="split" style="margin-top:20px">
+    <div class="panel">
+      <span class="tag bad">One-shotting</span>
+      <p class="sub">Does everything at once, runs out of context mid-feature, and leaves the next session guessing.</p>
+    </div>
+    <div class="panel">
+      <span class="tag bad">Premature completion</span>
+      <p class="sub">A later session sees progress was made and declares the job done. Compaction fixes neither &mdash; it &ldquo;doesn&rsquo;t always pass perfectly clear instructions to the next agent.&rdquo;</p>
+    </div>
+  </div>
+</section>
+
+<!-- 7 · FIVE MOVES -->
+<section class="slide" data-notes="This is the spine of the deck. Everything after refers back to it. Say the five out loud in order - people will write them down." data-script="So what is a loop, concretely? Five moves, and one turn of the loop does all five.
+
+Discovery - it finds work worth doing, rather than being handed a list. Handoff - it gives that task to an agent, in isolation. Verification - something independent decides whether the result is actually right. Persistence - the result and the state land somewhere that outlives the conversation. Scheduling - it happens again without you.
+
+The claim is that these are load-bearing: drop any one and the loop will not turn, or it will turn in place. The paper asserts that and never tests it, so take it as a definition rather than a finding - but as a checklist it has held up every time I have used it.
+
+One note on discovery before I move on, because it sets the ceiling for everything else: if the loop picks work of no value, the other four moves execute beautifully in service of nothing. And have the automation trigger a named skill you can read and improve, not a wall of instructions pasted into a cron job nobody will ever update.">
+  <h2 class="dt">One turn of a loop does five things: <b>drop any one and it stops turning</b></h2>
+  <div class="flow">
+    <div class="node" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><span class="lbl">Discovery</span><span class="ttl">Find the work</span><span class="cap">on its own</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><span class="lbl">Handoff</span><span class="ttl">Hand it off</span><span class="cap">isolated</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">Verify</span><span class="ttl">Say no</span><span class="cap">another agent</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><span class="lbl">Persist</span><span class="ttl">Write state</span><span class="cap">outside the chat</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-d); --tone-ink: var(--tone-d-ink)"><span class="lbl">Schedule</span><span class="ttl">Do it again</span><span class="cap">without you</span></div>
+  </div>
+  <p class="capbar">Drop any one and the loop &ldquo;will not turn, or will <em>turn in place</em>&rdquo;</p>
+</section>
+
+<!-- 8 · FIVE FAILURES -->
+<section class="slide" data-notes="Ask the room which one they have built. Most people have built the Manual Loop and called it automation. Let a couple of answers land before moving on." data-script="Because each move is load-bearing, each one has a named failure when you leave it out.
+
+Drop verification and you get the Nodding Loop - it ships whatever it made, and as the paper puts it, a loop without a real check is just an agent nodding at itself. Drop persistence, the Amnesiac Loop: every run starts from zero. Drop scheduling, the Manual Loop - which is one run you did once, not a loop, and I would guess it is the most common thing in this room today. Drop discovery, the Blind Loop: four moves executed beautifully on work that did not matter. Drop handoff, the Tangled Loop: agents stepping on each other in the same files.
+
+Which of these have you built? Genuinely - has anyone got a Manual Loop they have been calling automation?">
+  <h2 class="wide">Each missing move has a name</h2>
+  <div class="grid g3">
+    <div class="card accent"><span class="num">NO VERIFICATION</span><p><strong>The Nodding Loop.</strong> Ships whatever it produced &mdash; &ldquo;an agent nodding at itself.&rdquo;</p></div>
+    <div class="card"><span class="num">NO PERSISTENCE</span><p><strong>The Amnesiac Loop.</strong> Every run starts from zero.</p></div>
+    <div class="card"><span class="num">NO SCHEDULING</span><p><strong>The Manual Loop.</strong> One run you did once, not a loop.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><span class="num">NO DISCOVERY</span><p><strong>The Blind Loop.</strong> Flawless execution on work that did not matter.</p></div>
+    <div class="card"><span class="num">NO HANDOFF</span><p><strong>The Tangled Loop.</strong> Agents colliding in the same files.</p></div>
+  </div>
+</section>
+
+<!-- 9 · IT PRAISES ITSELF -->
+<section class="slide" data-notes="Slow down - the next four slides all follow from this one. Strongest evidence in the deck: five unconnected parties, one finding. Say that explicitly; it is why the recommendation on the next slide is not hedged." data-script="So let us take verification, because it is the easiest of the five to cut corners on and the one you can least afford to skip. The framing I like: the check is the thing that can say no. If nothing in your loop can say no, you do not have a loop, you have an expensive way to generate confidence.
+
+And here is the single most corroborated finding I came across building this, which is why the recommendation is not hedged.
+
+Anthropic Labs: agents asked to evaluate their own work confidently praise it, even when the quality is obviously mediocre to a human. The field study, independently: the agent that wrote the code grades its own homework too softly. The qm harness, a completely different project, states it as an engineering rule - the context that produced a diff already believes it is correct, and that belief is the bias review exists to defeat. And ringer, a fourth project: an agent&#x27;s own done is not evidence, exit codes are.
+
+And the Bun engineer, who had the most at stake of anyone here, puts it as a plain observation about incentives: the Claude that wrote the code wants the code to get accepted; the Claude that reviews wants to find issues in it. He notes it is the same reason we do not let humans review their own pull requests.
+
+Five unconnected sources, different domains, same result. That is about as close to settled as anything gets in this field right now.">
+  <h2 class="wide">Five independent sources, one finding: it always praises itself</h2>
+  <div class="grid g3">
+    <div class="card"><span class="num">ANTHROPIC LABS</span><p>Agents &ldquo;tend to respond by confidently praising the work &mdash; even when, to a human observer, the quality is obviously mediocre.&rdquo;</p></div>
+    <div class="card"><span class="num">THE FIELD STUDY</span><p>&ldquo;The agent that wrote the code grades its own homework too softly.&rdquo;</p></div>
+    <div class="card accent"><span class="num">BUN</span><p>&ldquo;The Claude that wrote the code wants the code to get accepted. The Claude that reviews wants to find issues in the code.&rdquo;</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><span class="num">QM</span><p>&ldquo;The context that produced a diff already believes it is correct, and that belief is the bias review exists to defeat.&rdquo;</p></div>
+    <div class="card"><span class="num">RINGER</span><p>&ldquo;An agent&rsquo;s own &lsquo;done&rsquo; is not evidence. Exit codes are.&rdquo;</p></div>
+  </div>
+  <p class="capbar">Different domains, different authors, <em>same</em> result</p>
+</section>
+
+<!-- 10 · SEPARATION DIAL -->
+<section class="slide" data-notes="State the recommendation plainly here: no self-review. Adversarial review, rubber duck, or spar, in a different agent. This is the Monday ask, stated early." data-script="The fix is separation, and separation is a dial rather than a switch.
+
+At the weak end, an agent reviewing its own work, which we just established does not work. One notch up: a different prompt, same tools. Further: a different persona with different tools, told to be skeptical. Furthest: a different model from a different vendor, which some harnesses now do by config alone.
+
+The reason it works is not that the second agent is smarter. It is that tuning a standalone evaluator to be skeptical is far more tractable than making an author critical of its own work.
+
+Bun&#x27;s version is worth copying exactly, because it is structural rather than a preference. One implementer, two or more adversarial reviewers. The implementer doesn&#x27;t review. The reviewer doesn&#x27;t implement. And the reviewer gets only the diff - not the original file, not the implementer&#x27;s reasoning - and is told to assume the code is wrong.
+
+So the recommendation, plainly: no self-review. Put the critique in a different agent - adversarial review, rubber duck, spar, whatever your tooling calls it. That is the one change I would like everyone to leave with.">
+  <h2 class="dt">Separation is a dial, not a switch: <b>turn it up until the reviewer can disagree</b></h2>
+  <div class="flow">
+    <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">Discouraged</span><span class="ttl">Same agent</span><span class="cap">self-review</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><span class="lbl">Weak</span><span class="ttl">Different prompt</span><span class="cap">same tools</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><span class="lbl">Strong</span><span class="ttl">Different persona</span><span class="cap">own tools, told to be skeptical</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><span class="lbl">Strongest</span><span class="ttl">Different vendor</span><span class="cap">config-only in some harnesses</span></div>
+  </div>
+  <p class="sub" style="margin-top:20px">Bun&rsquo;s structural rule: <strong>1 implementer, 2 or more adversarial reviewers.</strong> &ldquo;The implementer doesn&rsquo;t review. The reviewer doesn&rsquo;t implement.&rdquo; The reviewer is given only the diff, and told to assume the code is wrong.</p>
+  <p class="capbar">Tuning a <em>skeptic</em> is more tractable than making an author self-critical</p>
+</section>
+
+<!-- 11 · VERIFY THE VERIFIER -->
+<section class="slide" data-notes="This is the slide people should photograph. It is the cheapest high-value practice in the deck." data-script="Second-order problem, and this is the one I had not thought about before reading for this talk: who checks the check?
+
+The line is from Anthropic&#x27;s code migration write-up - a judge that doesn&#x27;t catch breakage isn&#x27;t a judge. Their practice is to run the judge against deliberately broken code and confirm it fails. If your check passes broken code, you do not have a check, you have a green light.
+
+ringer ships this as an actual command. It runs every check against the unmodified codebase before any worker spawns, and its linter refuses manifests containing checks that cannot fail. Their rule is: fix the check before spawning. Two different projects, different domains, same conclusion - and only one of them automated it.">
+  <h2 class="dt">Who checks the check? <b>A judge that doesn&rsquo;t catch breakage isn&rsquo;t a judge</b></h2>
+  <div class="versus">
+    <div class="side" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><div class="bar"></div><span class="lbl">Untested</span><span class="ttl">Passes Everything</span><span class="cap">including broken code</span></div>
+    <div class="vs" aria-hidden="true">VS</div>
+    <div class="side" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><div class="bar"></div><span class="lbl">Proven</span><span class="ttl">Fails On Purpose</span><span class="cap">run against broken code first</span></div>
+  </div>
+  <p class="sub" style="margin-top:20px">ringer ships this as a command: <code>--baseline</code> runs every check against unmodified code <strong>before</strong> any worker spawns, and its linter rejects &ldquo;checks that cannot fail.&rdquo;</p>
+  <p class="capbar">Fix the check <em>before</em> spawning</p>
+</section>
+
+<!-- 12 · MECHANICAL VS COOPERATIVE -->
+<section class="slide" data-notes="Note the division: verification mechanical, review adversarial. Those are two different jobs and people conflate them. Flag the third row as your own synthesis." data-script="Which leads to the design rule I would put on the wall. Anything deterministic logic can solve never goes to a probabilistic model, and where you draw that line decides whether the loop is reliable.
+
+In practice that splits into two different jobs that people conflate. Verification should be mechanical - a compiler, a linter, a diff, a test suite, an exit code. Something that cannot be talked out of its answer. Review should be adversarial - a second agent, hostile, looking for what the first one talked itself into. You use an LLM rubric only where there is genuinely no mechanical oracle available, and that is my synthesis rather than any single source&#x27;s claim.">
+  <h2 class="dt">Two different jobs: <b>verification is mechanical, review is adversarial</b></h2>
+  <div class="stack">
+    <div class="row i1" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><div class="lbl">Mechanical</div><div class="body"><div class="ttl">Compiler, linter, diff, test suite, exit code</div><div class="cap">cannot be talked out of its answer</div></div></div>
+    <div class="row i2" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><div class="lbl">Adversarial</div><div class="body"><div class="ttl">A second agent, hostile, hunting for what the first talked itself into</div><div class="cap">for what no script can judge</div></div></div>
+    <div class="row i3" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><div class="lbl">LLM rubric</div><div class="body"><div class="ttl">Only where no mechanical oracle exists</div><div class="cap">author&rsquo;s synthesis, not a sourced claim</div></div></div>
+  </div>
+  <p class="capbar">&ldquo;Where one draws that line decides whether the loop is <em>reliable</em>&rdquo;</p>
+</section>
+
+<!-- 13 · THREE BUGS -->
+<section class="slide" data-notes="This is the slide that convinces engineers. Compilers cannot catch these. A human reading a million-line diff would not catch these. Pick one and walk it - the async close is the most visceral." data-script="Let me show you what the adversarial reviewers actually caught, because this is the part that convinced me.
+
+Three bugs. All three compiled cleanly. All three looked completely plausible.
+
+The first: closing a pipe. The libuv close call is asynchronous - libuv keeps the raw pointer until the next tick, then calls your callback, which frees the allocation. But in the ported Rust, the box holding that pipe drops at the end of the match arm. So libuv is left holding freed memory, and the callback frees it a second time. Use-after-free, then double-free. The compiler is perfectly happy.
+
+The second: a file modified before 1970. Truncating a negative float into seconds and nanoseconds rounds toward zero and gives you a negative nanoseconds field, which is not a valid timespec.
+
+The third: an eager-evaluation bug. unwrap_or evaluates its argument eagerly, so the fallback panics before the function ever gets to ignore it.
+
+None of those are catchable by a compiler, and none realistically catchable by a human reading a million-line diff. They were caught by a second model handed the diff and nothing else, told to assume the code was wrong.">
+  <h2 class="wide">Three bugs the adversarial reviewers caught. All three compiled cleanly.</h2>
+  <div class="grid g3">
+    <div class="card accent"><span class="num">ASYNC CLOSE</span><p><code>uv_close</code> is asynchronous &mdash; libuv holds the pointer until the next tick, but the <code>Box</code> drops at the end of the match arm. Use-after-free, then double-free.</p></div>
+    <div class="card"><span class="num">NEGATIVE TIMESPEC</span><p>For a file modified before 1970, <code>trunc</code> rounds toward zero and produces a negative nanoseconds field. <code>floor</code> keeps it in range.</p></div>
+    <div class="card"><span class="num">EAGER UNWRAP</span><p><code>unwrap_or</code> evaluates its argument eagerly, so the fallback panics before it can be ignored. <code>unwrap_or_else</code> stays lazy.</p></div>
+  </div>
+  <p class="sub" style="margin-top:20px">The reviewer&rsquo;s context was <strong>only the diff</strong>, and it was told to assume the code was wrong. Every fix commit carries its review attribution in the subject line.</p>
+</section>
+
+<!-- 14 · PERSISTENCE -->
+<section class="slide" data-notes="Fast slide. The definition of done is the takeaway; it makes resumability free." data-script="Persistence - quickly, because it is the least controversial and the most agreed-upon.
+
+Four separate projects, one rule: a loop&#x27;s memory cannot live in the context window. Progress files and git history. A durable queue that never trusts a stale status log. Never RAM alone. And my favourite version of it, from the migration work: define done as the output file exists on disk, rebuild the work queue from disk every time, and the whole thing becomes resumable by construction. You get crash recovery for free because you never had a separate notion of progress to lose.">
+  <h2 class="wide">Four harnesses, one rule: state lives outside the conversation</h2>
+  <table class="tbl">
+    <tr><th>Source</th><th>The rule</th></tr>
+    <tr><td class="k">Anthropic</td><td>A progress file plus git history <em>is</em> the handover between sessions.</td></tr>
+    <tr><td class="k">firstmate</td><td>A durable queue that &ldquo;never trusts a stale status log alone.&rdquo;</td></tr>
+    <tr><td class="k">qm</td><td>&ldquo;Never RAM alone&rdquo; &mdash; anything read back later goes to durable storage.</td></tr>
+    <tr><td class="k">Code migration</td><td>The queue is rebuilt from disk, so the work is <strong>resumable by construction</strong>.</td></tr>
+  </table>
+  <p class="capbar">Done means <em>the output file exists on disk</em></p>
+</section>
+
+<!-- 15 · FIX THE RULE -->
+<section class="slide" data-notes="This generalizes past agents - it is ordinary good engineering, which is why it lands with this room. Say so." data-script="This one is the most transferable idea in the deck, and it is not really about agents.
+
+When a reviewer keeps catching the same mistake across many files, the fix is never per-file. You add one sentence to the rulebook and regenerate the affected batch. The rulebook grows; the code never gets hand-patched against it.
+
+Bun has the cleanest example. Partway through, the agents started reading get the crates to compile as stub out the functions that do not compile, and writing long comments justifying the workarounds. The fix was not to go and unstub them. It was one new rule handed to the reviewers: if you need a paragraph-long comment to justify why the workaround is okay, the code is wrong, fix the code. One prompt edit, a few hours, and it stopped.
+
+You already believe this about production code. The point is that when generation is nearly free, patching instances is not just inefficient - it actively hides the defect in your loop.">
+  <h2 class="dt">When the same defect keeps appearing: <b>fix the rule, not the file</b></h2>
+  <div class="versus">
+    <div class="side" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><div class="bar"></div><span class="lbl">Instance</span><span class="ttl">Patch Each File</span><span class="cap">the loop keeps producing it</span></div>
+    <div class="vs" aria-hidden="true">VS</div>
+    <div class="side" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><div class="bar"></div><span class="lbl">Class</span><span class="ttl">Amend The Rulebook</span><span class="cap">regenerate the affected batch</span></div>
+  </div>
+  <p class="sub" style="margin-top:20px">Bun&rsquo;s version: when agents started stubbing out functions and writing long comments to justify workarounds, the fix was <strong>one new rule handed to the reviewers</strong> &mdash; &ldquo;If you need a paragraph-long comment to justify why the workaround is OK, the code is wrong &mdash; fix the code.&rdquo; One prompt edit, and it stopped.</p>
+</section>
+
+<!-- 16 · ECONOMICS -->
+<section class="slide" data-notes="Flag the caveat honestly - these are observations from single runs, not benchmarks. This room will ask." data-script="Economics, because this is a department that thinks about cost.
+
+The framing I like best: your premium budget stops scaling with lines of code written and starts scaling with decisions made. That is the whole reorganization in one line.
+
+Two numbers from ringer, and I want to be honest that these are observations from single production runs, not benchmarks. Keeping one live status page updated by a dedicated subagent cost upwards of ninety thousand tokens. Rendering the same page with a plain script cost zero, forever. A single compiled report cost about two hundred and eighty-four thousand tokens from one worker.
+
+The practice that follows is model tiering: cheap models for high-volume implementation work, your best model for the reviewers and for anything that writes rules other agents will follow. Spend where judgment happens.">
+  <h2 class="dt">The reorganization in one line: <b>budget stops scaling with lines written and starts scaling with decisions made</b></h2>
+  <table class="tbl">
+    <tr><th>Measured</th><th>Cost</th></tr>
+    <tr><td class="k">One live status artifact, kept updated by a dedicated subagent</td><td><strong>~90k+ tokens</strong></td></tr>
+    <tr><td class="k">The same artifact, rendered by a plain script</td><td><strong>$0, forever</strong></td></tr>
+    <tr><td class="k">One compiled report, single worker</td><td><strong>~284k tokens</strong></td></tr>
+  </table>
+  <p class="sub" style="margin-top:18px">Tier the models: cheap workers for high-volume implementation, your best model for reviewers &ldquo;and for anything that writes rules other agents will follow.&rdquo; Figures are single-run observations, not benchmarks.</p>
+</section>
+
+<!-- 17 · FOUR COSTS -->
+<section class="slide" data-notes="This is the honest counterweight. Do not rush it - a room this skeptical will trust the rest of the deck more because this slide exists." data-script="Now the part that keeps this from being a sales pitch. Four costs, and the thing they share is that none of them makes a noise while the loop is running. The more cheerfully it runs, the more quietly it errs.
+
+Verification debt: every merge saves time, and the saved time becomes unverified output waiting to be paid back. It hides in the gap between it runs and it&#x27;s right.
+
+Comprehension rot: the codebase grows while the map in your head stalls.
+
+Cognitive surrender: the attitude version. Not I don&#x27;t have time to check but I no longer want to bother. The more reliable the loop, the easier it is to stop having an opinion.
+
+Token blowout: the only one that hits a bill directly. One bug can spin all night and produce an invoice rather than fixed code.">
+  <h2 class="wide">Four costs that accrue in silence</h2>
+  <div class="grid g4">
+    <div class="card"><span class="num">VERIFICATION DEBT</span><p>Saved time becomes unverified output, hiding &ldquo;in the gap between &lsquo;runs&rsquo; and &lsquo;right&rsquo;.&rdquo;<br><br><strong>Guard:</strong> an independent evaluator.</p></div>
+    <div class="card"><span class="num">COMPREHENSION ROT</span><p>&ldquo;The codebase grows while the map in one&rsquo;s head stalls.&rdquo;<br><br><strong>Guard:</strong> read the output; explain a few changes.</p></div>
+    <div class="card"><span class="num">COGNITIVE SURRENDER</span><p>Not &ldquo;no time&rdquo; but &ldquo;no longer want to bother.&rdquo;<br><br><strong>Guard:</strong> the loop can execute, it cannot decide.</p></div>
+    <div class="card"><span class="num">TOKEN BLOWOUT</span><p>&ldquo;One bug can spin idle all night.&rdquo;<br><br><strong>Guard:</strong> hard caps before shipping.</p></div>
+  </div>
+  <p class="capbar">&ldquo;The more cheerfully it runs, the more quietly it <em>errs</em>&rdquo;</p>
+</section>
+
+<!-- 18 · THEY COMPOUND -->
+<section class="slide" data-notes="Walk the cycle once with your finger. End on the buried errors. Do not soften the landing." data-script="And they are not four independent risks. They are one failure wearing four faces, and they feed each other.
+
+Here is the worked example. Twenty pull requests open overnight, all green. Three of them contain a subtle error the tests do not cover. With no independent evaluator, those three merge - verification debt. Because you merged twenty PRs without reading them, your mental model now lags by twenty changes - comprehension rot. Because it all went so smoothly, you stop reading tomorrow&#x27;s batch - cognitive surrender. And because the loop spawned helpers and retried freely all night, the bill is triple what you estimated - token blowout.
+
+So: three buried errors, sitting in a codebase you no longer fully understand, guarded by someone who has stopped looking. Discovered eventually, when one of them surfaces as an incident.">
+  <h2 class="dt">Twenty green pull requests, one morning: <b>the four costs are one failure wearing four faces</b></h2>
+  <div class="flow">
+    <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">1</span><span class="ttl">Unverified merges</span><span class="cap">verification debt</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">2</span><span class="ttl">Understanding lags</span><span class="cap">comprehension rot</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">3</span><span class="ttl">You stop reading</span><span class="cap">cognitive surrender</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">4</span><span class="ttl">The bill triples</span><span class="cap">token blowout</span></div>
+  </div>
+  <p class="sub" style="margin-top:22px">Twenty PRs open overnight, all tests green. Three contain a subtle error the tests do not cover. No independent evaluator, so they merge. Twenty merged unread, so your model of the codebase lags by twenty changes. It went so smoothly, so you stop reading tomorrow&rsquo;s batch. Helpers and retries ran free all night, so the bill is triple.</p>
+  <p class="capbar">Three buried errors, in a codebase you no longer understand, guarded by someone who has <em>stopped looking</em></p>
+</section>
+
+<!-- 19 · ECHO CHAMBER -->
+<section class="slide" data-notes="Let it sit. Say nothing for two seconds after reading it. This is the emotional centre of the talk and it is why the adversarial-review recommendation matters." data-script="And this is the sentence I have not been able to stop thinking about.
+
+The most fascinating thing about loop engineering is that it lets one person do a team&#x27;s work. The most dangerous thing is the same spot - because a team argues with itself, and one person plus a pile of loops easily becomes an echo chamber where no one argues.
+
+That is the real argument for the adversarial reviewer. Not that it catches more bugs, though it does. It is that it is the only thing left in the system that disagrees with you.">
+  <h2 class="dt">The dangerous part is <b>the same spot</b></h2>
+  <p class="quote" style="max-width: min(1080px, 94%)"><span class="mark">&ldquo;</span>The most fascinating thing about loop engineering is that it lets one person do a team&rsquo;s work. The most dangerous thing is the same spot &mdash; because a team argues with itself, and one person plus a pile of loops easily becomes an echo chamber where no one argues.</p>
+  <p class="capbar">The guard is one line: the loop can execute, but it <em>cannot decide</em></p>
+</section>
+
+<!-- 20 · SCAFFOLDING DECAYS -->
+<section class="slide" data-notes="This is the slide that prevents cargo-culting. Frame the deletions as a result, not an embarrassment." data-script="One more thing before I land, and it is the guard against everyone in this room cargo-culting a harness.
+
+Every component in a harness encodes an assumption about what the model cannot do on its own, and those assumptions go stale as models improve. Anthropic&#x27;s own harness is the evidence: on one model generation it needed context resets and decomposition into sprints. On the next, they deleted both, and the builder ran coherently for over two hours without them. The planner survived, because without it the generator under-scoped.
+
+So the test is not does a loop need an evaluator. It is: does this task sit beyond what the model does reliably on its own, right now? When a new model lands, re-run that question and delete what is no longer load-bearing.">
+  <h2 class="dt">Every component encodes an assumption about what the model cannot do: <b>so components expire</b></h2>
+  <div class="versus">
+    <div class="side" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><div class="bar"></div><span class="lbl">Built for 4.5</span><span class="ttl">Resets + Sprints</span><span class="cap">context resets, decomposition, per-sprint evaluator</span></div>
+    <div class="vs" aria-hidden="true">VS</div>
+    <div class="side" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><div class="bar"></div><span class="lbl">Kept for 4.6</span><span class="ttl">Planner Only</span><span class="cap">resets gone, sprints gone, evaluator once at the end</span></div>
+  </div>
+  <p class="sub" style="margin-top:20px">On the newer model they deleted context resets and the sprint construct entirely, and the builder ran coherently for over two hours without them. <strong>The planner survived</strong> &mdash; without it &ldquo;the generator under-scoped.&rdquo;</p>
+  <p class="capbar">An evaluator is worth the cost when the task sits <em>beyond</em> what the model does reliably solo</p>
+</section>
+
+<!-- 21 · ABOVE THE LOOP -->
+<section class="slide" data-notes="Label this as your framing, out loud. The sources do not make the superset claim - you do. This room respects that distinction and will notice if you blur it." data-script="Briefly, where I think this goes, and I want to flag clearly that this next bit is my framing, not something my sources claim.
+
+I think loops are one shape of a larger thing. Dynamic workflows are the superset, and a subset of dynamic workflows are loops. Two pieces of evidence. The mature harnesses have stopped treating loop as the top-level concept - they separate workflow, loop, scheduler and organization as different axes: what the agents take on, how long they keep at it, when it happens, what persists. And the Bun rewrite was not one loop, it was about fifty dynamic workflows composed together, each of which was internally a loop.
+
+That also resolves the tension from the last slide. The five moves define the shape. What implements each move is what decays.">
+  <h2 class="dt">Where I think this goes: <b>loops are one shape of a larger thing</b></h2>
+  <div class="stack">
+    <div class="row i1" style="--tone: var(--tone-d); --tone-ink: var(--tone-d-ink)"><div class="lbl">Dynamic workflows</div><div class="body"><div class="ttl">What agents take on, and what persists</div><div class="cap">the superset</div></div></div>
+    <div class="row i2" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><div class="lbl">Loops</div><div class="body"><div class="ttl">How long they keep at it</div><div class="cap">a subset of dynamic workflows</div></div></div>
+    <div class="row i3" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><div class="lbl">One turn</div><div class="body"><div class="ttl">The five moves</div><div class="cap">discovery, handoff, verification, persistence, scheduling</div></div></div>
+  </div>
+  <p class="sub" style="margin-top:18px">This framing is mine, not my sources&rsquo;. Two pieces of evidence: mature harnesses have stopped treating &ldquo;loop&rdquo; as the top-level concept, and the Bun rewrite was not one loop &mdash; it was about fifty dynamic workflows composed together, each internally a loop.</p>
+  <p class="capbar">The five moves define the <em>shape</em>; what implements each move is what decays</p>
+</section>
+
+<!-- 22 · WHAT IT LOOKS LIKE HERE -->
+<section class="slide" data-notes="Deliberately generic - do not invent details about our systems. The point is that they already own every ingredient. Invite them to fill it in for their own area." data-script="So what does that look like here. I have kept this deliberately generic, because I am not going to stand up and invent details about systems you own better than I do.
+
+But notice you already have every ingredient. Discovery is a scheduled pass over a signal you already collect. Handoff is one isolated worktree per finding. Verification is the mechanical gate you already have - the thing that already tells you pass or fail, which is exactly the referee this whole talk is asking for. Persistence is a PR, a work item, a state file. And scheduling is the part where it happens tomorrow without you.
+
+That is an illustrative shape, not a proposal. A real one needs a name, an owner, a hard budget cap, and a check you have proven can fail.">
+  <h2 class="dt">The same five moves, on work this department already does</h2>
+  <div class="flow">
+    <div class="node" style="--tone: var(--tone-a); --tone-ink: var(--tone-a-ink)"><span class="lbl">Discovery</span><span class="ttl">A signal you already collect</span><span class="cap">scheduled pass</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-b); --tone-ink: var(--tone-b-ink)"><span class="lbl">Handoff</span><span class="ttl">One isolated worktree</span><span class="cap">per finding</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-x); --tone-ink: var(--tone-x-ink)"><span class="lbl">Verify</span><span class="ttl">The gate you already have</span><span class="cap">it already says pass or fail</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-c); --tone-ink: var(--tone-c-ink)"><span class="lbl">Persist</span><span class="ttl">PR, work item, state file</span><span class="cap">nothing new</span></div> <div class="arrow" aria-hidden="true">&rarr;</div> <div class="node" style="--tone: var(--tone-d); --tone-ink: var(--tone-d-ink)"><span class="lbl">Schedule</span><span class="ttl">Tomorrow, without you</span><span class="cap">the part that makes it a loop</span></div>
+  </div>
+  <div class="card accent" style="margin-top:24px"><span class="num">A SHAPE, NOT A PROPOSAL</span><p>Any real version needs a name, an owner, a hard budget cap, and a mechanical check that has been proven to fail.</p></div>
+</section>
+
+<!-- 23 · BUILD ONE -->
+<section class="slide" data-notes="End on the ask, not on a summary. Three things, one week. Then take questions - expect pushback on cost and on who owns the loop when it breaks." data-script="Three things, and I would genuinely like someone to try this before we next meet.
+
+One: pick the manual follow-up you did most often this week. That repeated step is a loop asking to be built.
+
+Two: write the check first, and prove it fails. Run it against deliberately broken input before you ever point an agent at it. If it passes broken input, you do not have a check.
+
+Three: put the critique in a different agent. Adversarial review, rubber duck, spar - whatever your tooling calls it. Never let the thing that wrote the code be the thing that approves it.
+
+And cap the budget before you ship it, so an idle bug cannot burn a night&#x27;s quota.
+
+Sources are here, everything in this deck traces to one of them, and I am happy to share the full inventory. Questions.">
+  <h2 class="wide">One loop, one week</h2>
+  <div class="grid g3">
+    <div class="card"><span class="num">1 &middot; PICK THE REPEAT</span><p>The manual follow-up you did most often this week. That repeated step is a loop asking to be built.</p></div>
+    <div class="card accent"><span class="num">2 &middot; WRITE THE CHECK FIRST</span><p>Run it against deliberately broken input. If it passes, it is not a check.</p></div>
+    <div class="card"><span class="num">3 &middot; SEPARATE THE CRITIC</span><p>Adversarial review, rubber duck, or spar &mdash; in a different agent. Never self-review.</p></div>
+  </div>
+  <p class="capbar">Cap the budget <em>before</em> you ship it</p>
+  <p class="sub" style="margin-top:20px"><strong>Sources.</strong> <i>Loop Engineering</i> (field study, June 2026) &middot; bun.com &mdash; <i>Bun in Rust</i> &middot; Prisma &mdash; <i>Compute on Bun&rsquo;s Rust rewrite</i> &middot; Anthropic Engineering &mdash; <i>Effective harnesses for long-running agents</i>, <i>Harness design for long-running apps</i> &middot; Claude blog &mdash; <i>Building verification loops with skills</i>, <i>Large code migrations</i> &middot; Repositories &mdash; ultracodex, loops-of-fury, firstmate, qm, ringer.</p>
+</section>
+
+
+</main>
+
+<div id="bar"></div>
+<div id="blank"></div>
+<p id="help">← → navigate · <b>S</b> presenter view · <b>F</b> full screen · <b>B</b> blank · <b>N</b> notes · <b>T</b> theme · <b>P</b> print</p>
+
+<div id="presenter">
+  <div class="pbar">
+    <span class="pcount" id="pCount">1 / 23</span>
+    <span class="ptime" id="pTime">00:00</span>
+    <button type="button" id="pTimerBtn" aria-pressed="true">Pause</button>
+    <button type="button" id="pResetBtn">Reset</button>
+    <span class="pspacer"></span>
+    <button type="button" id="pPrev">‹ Prev</button>
+    <button type="button" id="pNext">Next ›</button>
+    <button type="button" id="pBlank" aria-pressed="false">Blank screen</button>
+    <button type="button" id="pTheme">Theme</button>
+  </div>
+  <div class="pmain">
+    <div>
+      <div class="pstage" id="pStage"></div>
+      <div class="pnext"><div class="k">Next up</div><div class="v" id="pNextTitle">—</div></div>
+    </div>
+    <div class="pnotes">
+      <h2>Your cue</h2>
+      <p class="cue" id="pCue"></p>
+      <h2 class="second" id="pScriptHead" hidden>What you say here</h2>
+      <div class="script" id="pScript"></div>
+    </div>
+  </div>
+</div>
+
+<div id="hud">
+  <button id="prev" type="button" aria-label="Previous slide">‹</button>
+  <span id="counter" aria-live="polite">1 / 23</span>
+  <button id="next" type="button" aria-label="Next slide">›</button>
+  <button id="notesBtn" type="button" aria-pressed="false" aria-controls="notes">Notes</button>
+  <button id="themeBtn" type="button" aria-label="Toggle light and dark theme" aria-pressed="false">◐</button>
+</div>
+
+<aside id="notes" role="region" aria-label="Speaker notes">
+  <h2>Your cue</h2>
+  <p id="notesText" aria-live="polite"></p>
+  <h2 id="scriptHead" hidden>What you say here</h2>
+  <div id="scriptText"></div>
+</aside>
+
+<script>
+(() => {
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const LAST = slides.length - 1;
+  const IS_PRESENTER = new URLSearchParams(location.search).get("view") === "presenter";
+  const ME = Math.random().toString(36).slice(2);
+
+  const $ = (id) => document.getElementById(id);
+  const bar = $("bar"), counter = $("counter"), notes = $("notes");
+  const notesText = $("notesText"), scriptText = $("scriptText"), scriptHead = $("scriptHead");
+  const notesBtn = $("notesBtn"), themeBtn = $("themeBtn");
+
+  let i = 0, blanked = false, muted = false; // muted = applying a remote update, do not echo
+  let presenterWin = null;
+
+  slides.forEach((s, n) => s.setAttribute("aria-label", "Slide " + (n + 1) + " of " + slides.length));
+
+  const h0 = parseInt(location.hash.replace("#", ""), 10);
+  if (!isNaN(h0) && h0 >= 1 && h0 <= slides.length) i = h0 - 1;
+
+  /* ---------- cross-window sync ----------
+     Two transports, because neither covers every case:
+       - direct window handles: the only thing that works over file://
+       - BroadcastChannel: covers windows opened independently over http(s)     */
+  let bc = null;
+  try { bc = new BroadcastChannel("loop-engineering-deck"); } catch (e) {}
+  const peers = new Set();
+
+  function send(msg) {
+    if (muted) return;
+    msg = Object.assign({ src: ME }, msg);
+    try { if (window.opener && !window.opener.closed) window.opener.postMessage(msg, "*"); } catch (e) {}
+    for (const w of [...peers]) {
+      if (!w || w.closed) { peers.delete(w); continue; }
+      try { w.postMessage(msg, "*"); } catch (e) {}
+    }
+    if (bc) { try { bc.postMessage(msg); } catch (e) {} }
+  }
+
+  function receive(msg) {
+    if (!msg || typeof msg !== "object" || msg.src === ME) return;
+    muted = true;
+    try {
+      if (msg.type === "hello") {
+        if (!IS_PRESENTER) document.body.classList.add("projecting");
+        send({ type: "state", i: i, theme: themeNow(), blanked: blanked });
+      } else if (msg.type === "bye") {
+        document.body.classList.remove("projecting");
+      } else if (msg.type === "state") {
+        if (typeof msg.i === "number" && msg.i !== i) { i = Math.min(LAST, Math.max(0, msg.i)); render(); }
+        if (msg.theme && msg.theme !== themeNow()) setTheme(msg.theme);
+        if (typeof msg.blanked === "boolean" && msg.blanked !== blanked) setBlank(msg.blanked);
+      }
+    } finally { muted = false; }
+  }
+  window.addEventListener("message", (e) => receive(e.data));
+  if (bc) bc.onmessage = (e) => receive(e.data);
+
+  /* ---------- theme / blank ---------- */
+  const themeNow = () => document.documentElement.getAttribute("data-theme");
+  function setTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    if (themeBtn) themeBtn.setAttribute("aria-pressed", String(t === "dark"));
+  }
+  function toggleTheme() {
+    setTheme(themeNow() === "dark" ? "light" : "dark");
+    send({ type: "state", i: i, theme: themeNow(), blanked: blanked });
+  }
+  function setBlank(v) {
+    blanked = v;
+    document.body.classList.toggle("blanked", v);
+    const b = $("pBlank");
+    if (b) b.setAttribute("aria-pressed", String(v));
+  }
+  function toggleBlank() { setBlank(!blanked); send({ type: "state", i: i, theme: themeNow(), blanked: blanked }); }
+
+  /* ---------- presenter console ---------- */
+  let stage = null, deck = $("deck");
+  function fitStage() {
+    if (!stage || !deck) return;
+    const w = stage.clientWidth;
+    const scale = w / 1280;
+    deck.style.transform = "scale(" + scale + ")";
+    stage.style.height = (720 * scale) + "px";
+  }
+  function headingOf(n) {
+    const el = slides[n] && slides[n].querySelector("h1, h2");
+    return el ? el.textContent.replace(/\s+/g, " ").trim() : "Slide " + (n + 1);
+  }
+
+  if (IS_PRESENTER) {
+    document.body.classList.add("presenter");
+    stage = $("pStage");
+    stage.appendChild(deck);
+    window.addEventListener("resize", fitStage);
+
+    let started = Date.now(), running = true, acc = 0;
+    const fmt = (ms) => {
+      const t = Math.floor(ms / 1000);
+      return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+    };
+    setInterval(() => {
+      $("pTime").textContent = fmt(acc + (running ? Date.now() - started : 0));
+    }, 250);
+    $("pTimerBtn").onclick = (e) => {
+      if (running) { acc += Date.now() - started; running = false; e.target.textContent = "Start"; }
+      else { started = Date.now(); running = true; e.target.textContent = "Pause"; }
+      e.target.setAttribute("aria-pressed", String(running));
+    };
+    $("pResetBtn").onclick = () => { acc = 0; started = Date.now(); };
+    $("pPrev").onclick = () => go(-1);
+    $("pNext").onclick = () => go(1);
+    $("pBlank").onclick = toggleBlank;
+    $("pTheme").onclick = toggleTheme;
+
+    send({ type: "hello" });
+    window.addEventListener("pagehide", () => send({ type: "bye" }));
+  }
+
+  function openPresenter() {
+    if (IS_PRESENTER) return;
+    if (presenterWin && !presenterWin.closed) { presenterWin.focus(); return; }
+    const url = location.pathname + "?view=presenter#" + (i + 1);
+    presenterWin = window.open(url, "loops-presenter", "width=1200,height=820");
+    if (!presenterWin) { alert("Your browser blocked the presenter window. Allow pop-ups for this page and press S again."); return; }
+    peers.add(presenterWin);
+    document.body.classList.add("projecting");
+    const poll = setInterval(() => {
+      if (presenterWin.closed) { clearInterval(poll); peers.delete(presenterWin); document.body.classList.remove("projecting"); }
+    }, 800);
+  }
+
+  function fullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  }
+
+  /* ---------- render ---------- */
+  function paintNotes(target, headEl, n) {
+    const cue = slides[n].dataset.notes || "No notes for this slide.";
+    const script = slides[n].dataset.script || "";
+    if (target.cue) target.cue.textContent = cue;
+    headEl.hidden = !script;
+    target.script.replaceChildren();
+    if (script) {
+      for (const para of script.split(/\n{2,}/)) {
+        const el = document.createElement("p");
+        el.textContent = para;
+        target.script.appendChild(el);
+      }
+    }
+  }
+
+  function render() {
+    slides.forEach((s, n) => s.classList.toggle("active", n === i));
+    if (counter) counter.textContent = (i + 1) + " / " + slides.length;
+    if (bar) bar.style.width = ((i + 1) / slides.length * 100) + "%";
+    paintNotes({ cue: notesText, script: scriptText }, scriptHead, i);
+
+    if (IS_PRESENTER) {
+      $("pCount").textContent = (i + 1) + " / " + slides.length;
+      $("pNextTitle").textContent = i < LAST ? headingOf(i + 1) : "End of deck";
+      paintNotes({ cue: $("pCue"), script: $("pScript") }, $("pScriptHead"), i);
+      fitStage();
+    }
+    history.replaceState(null, "", "#" + (i + 1));
+    slides[i].scrollTop = 0;
+    send({ type: "state", i: i, theme: themeNow(), blanked: blanked });
+  }
+
+  function go(d) {
+    const n = Math.min(LAST, Math.max(0, i + d));
+    if (n === i) return;
+    i = n; render();
+  }
+  function jump(n) { if (n !== i) { i = Math.min(LAST, Math.max(0, n)); render(); } }
+
+  function toggleNotes() {
+    if (!notes) return;
+    const on = notes.classList.toggle("on");
+    notesBtn.setAttribute("aria-pressed", String(on));
+  }
+
+  if (themeBtn) themeBtn.setAttribute("aria-pressed", String(themeNow() === "dark"));
+  if ($("next")) $("next").onclick = () => go(1);
+  if ($("prev")) $("prev").onclick = () => go(-1);
+  if (notesBtn) notesBtn.onclick = toggleNotes;
+  if (themeBtn) themeBtn.onclick = toggleTheme;
+
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("button, input, textarea")) return;
+    const k = e.key.toLowerCase();
+    if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
+    else if (e.key === "Home") { e.preventDefault(); jump(0); }
+    else if (e.key === "End") { e.preventDefault(); jump(LAST); }
+    else if (e.key === "Escape" && notes && notes.classList.contains("on")) toggleNotes();
+    else if (k === "s") openPresenter();
+    else if (k === "f") fullscreen();
+    else if (k === "b") toggleBlank();
+    else if (k === "n" && !IS_PRESENTER) toggleNotes();
+    else if (k === "t") toggleTheme();
+    else if (k === "p") window.print();
+  });
+
+  window.addEventListener("hashchange", () => {
+    const h = parseInt(location.hash.replace("#", ""), 10);
+    if (!isNaN(h) && h >= 1 && h <= slides.length) jump(h - 1);
+  });
+
+  render();
+  if (IS_PRESENTER) setTimeout(fitStage, 60);
+})();
+</script>
+</body>
+</html>

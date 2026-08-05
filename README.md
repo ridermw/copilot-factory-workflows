@@ -123,11 +123,21 @@ For scale: a single trivial agent turn runs into double-digit credits. A
 
 ## Development
 
+Requires Node 18 or newer (developed and verified on 24). There is nothing to
+install — no dependencies, no dev dependencies, no lockfile — so a fresh clone
+runs immediately:
+
 ```bash
+git clone https://github.com/ridermw/copilot-factory-workflows
+cd copilot-factory-workflows
 npm test
 ```
 
-Four suites, no dependencies:
+Run a single suite with `node tests/<name>.test.mjs`. Each one is a plain
+script with no runner or config: it prints a line per assertion and exits
+non-zero if any fail.
+
+Four suites:
 
 - `tests/canvas.test.mjs` — manifest normalization, run projection, static HTML,
   and the client render driven through a DOM shim (`tests/dom-shim.mjs`).

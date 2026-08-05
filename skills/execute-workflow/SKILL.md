@@ -1,6 +1,6 @@
 ---
 name: execute-workflow
-description: Start or resume the Agent Factory authored by plan-workflow, attach the run to the workflow canvas, and report the outcome. Use after a factory workflow plan has been approved and it is time to actually run it. Prefers resuming an existing run over restarting, because a resume replays completed work for free.
+description: Start or resume the Agent Factory authored by plan-workflow, attach the run to the workflow canvas, and report the outcome. Use when a factory workflow plan has been approved and it is time to actually run it, or when an earlier run stopped short — on a limit, a decline, or a failure — and needs resuming. Prefers resuming the existing run over starting a second one.
 ---
 
 # Execute a factory workflow

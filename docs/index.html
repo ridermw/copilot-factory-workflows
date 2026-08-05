@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>copilot-factory-workflows — docs</title>
+<script>
+  (() => {
+    const param = new URLSearchParams(window.location.search).get("clawpilotTheme");
+    const theme =
+      param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef; --cp-surface: #ffffff; --cp-border: #dedede;
+  --cp-text: #242424; --cp-text-muted: #5c5c5c; --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b; --cp-link: #0078d4;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a; --cp-surface: #292929; --cp-border: #474747;
+  --cp-text: #dedede; --cp-text-muted: #b0b0b0; --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1; --cp-link: #4da6ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: clamp(32px, 7vw, 96px);
+  background: var(--cp-bg); color: var(--cp-text);
+  font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased; line-height: 1.6;
+}
+main { max-width: 70ch; margin: 0 auto; }
+h1 {
+  font-size: clamp(30px, 5vw, 52px); font-weight: 700;
+  letter-spacing: -.025em; line-height: 1.05; margin: 0 0 6px; text-wrap: balance;
+}
+.rule { width: 64px; height: 4px; border-radius: 2px; background: var(--cp-accent); margin: 22px 0 26px; }
+.lede { font-size: clamp(16px, 1.7vw, 21px); color: var(--cp-text-muted); margin: 0 0 34px; text-wrap: pretty; }
+h2 { font-size: clamp(18px, 2vw, 23px); font-weight: 700; letter-spacing: -.015em; margin: 34px 0 10px; }
+a { color: var(--cp-link); }
+.card {
+  display: block; text-decoration: none; color: inherit;
+  background: var(--cp-surface); border: 1px solid var(--cp-border);
+  border-radius: 16px; padding: clamp(18px, 2.2vw, 26px);
+  box-shadow: 0 0 2px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.14);
+  margin-bottom: 14px; transition: border-color .15s ease;
+}
+.card:hover, .card:focus-visible { border-color: var(--cp-accent); }
+.card .t { font-size: clamp(17px, 1.9vw, 22px); font-weight: 700; letter-spacing: -.015em; }
+.card p { margin: 6px 0 0; color: var(--cp-text-muted); font-size: 15.5px; }
+.meta { font-size: 14.5px; color: var(--cp-text-soft); }
+kbd {
+  font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+  border: 1px solid var(--cp-border); border-radius: 5px; padding: 1px 6px;
+  background: var(--cp-surface);
+}
+ul { padding-left: 20px; }
+li { margin-bottom: 6px; color: var(--cp-text-muted); }
+:focus-visible { outline: 2px solid var(--cp-accent); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>copilot-factory-workflows</h1>
+  <div class="rule"></div>
+  <p class="lede">Documentation and briefing material for factory workflows.</p>
+
+  <h2>Presentation</h2>
+
+  <a class="card" href="presentation/">
+    <span class="t">Loop Engineering &rarr;</span>
+    <p>Building the system that prompts the agent, so you stop being the one who does.
+    A 23-slide briefing: the five moves of a loop, why an agent cannot judge its own
+    work, and the four costs that accrue in silence.</p>
+  </a>
+
+  <p class="meta">
+    Presenter controls: <kbd>&larr;</kbd> <kbd>&rarr;</kbd> navigate &middot;
+    <kbd>S</kbd> presenter console &middot; <kbd>N</kbd> speaker notes &middot;
+    <kbd>F</kbd> full screen &middot; <kbd>B</kbd> blank &middot;
+    <kbd>T</kbd> theme &middot; <kbd>P</kbd> print
+  </p>
+
+  <ul style="margin-top:22px">
+    <li><a href="presentation/SCRIPT.md">Read the full speaker script</a> — every cue and
+      the spoken text, generated from the deck so it cannot drift.</li>
+    <li>Self-contained single file: no build step, no dependencies, no network calls.</li>
+    <li>Prints to 23 pages with the light palette forced, for anyone who missed it.</li>
+  </ul>
+</main>
+</body>
+</html>

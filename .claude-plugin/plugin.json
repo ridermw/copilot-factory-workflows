@@ -1,0 +1,18 @@
+{
+  "name": "copilot-factory-workflows",
+  "version": "0.1.0",
+  "description": "Plan multi-agent Agent Factory workflows, then execute them with a live workflow graph.",
+  "author": {
+    "name": "ridermw"
+  },
+  "homepage": "https://github.com/ridermw/copilot-factory-workflows",
+  "repository": "https://github.com/ridermw/copilot-factory-workflows",
+  "license": "MIT",
+  "keywords": [
+    "agent-factory",
+    "workflow",
+    "canvas",
+    "orchestration",
+    "multi-agent"
+  ]
+}

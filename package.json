@@ -1,0 +1,11 @@
+{
+  "name": "copilot-factory-workflows",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plan multi-agent Agent Factory workflows, then execute them with a live workflow graph.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node tests/canvas.test.mjs && node tests/skills.test.mjs"
+  }
+}

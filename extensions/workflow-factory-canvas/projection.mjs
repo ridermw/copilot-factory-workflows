@@ -278,7 +278,7 @@ function summarizeAgents(agents, runStatus) {
  *
  * @param manifest normalized manifest ({ factoryName, title, phases, nodes, edges })
  * @param detail   FactoryRunDetail, or null/undefined when no run is attached
- * @param options  { maxNodes?: number, progressLimit?: number, errors?: string[], runError?: string|null }
+ * @param options  { maxNodes?: number, progressLimit?: number, errors?: string[], warnings?: string[], runError?: string|null }
  */
 export function projectRun(manifest, detail, options = {}) {
     const maxNodes = Number.isFinite(options.maxNodes) ? options.maxNodes : 250;

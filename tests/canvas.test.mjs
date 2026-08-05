@@ -211,7 +211,8 @@ const liveDetail = {
     status: "running",
     createdAt: Date.now() - 5000,
     updatedAt: Date.now(),
-    currentPhase: "review",
+    // FactoryCurrentPhase is { id, ordinal }, never a bare string.
+    currentPhase: { id: "review", ordinal: 1 },
     liveAgentCount: 2,
     terminal: null,
     phases: [

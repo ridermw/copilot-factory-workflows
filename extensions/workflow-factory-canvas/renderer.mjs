@@ -207,6 +207,7 @@ function renderHeader(v) {
       : v.runStatus === "completed" ? STATE_COLOR.succeeded
       : v.runStatus === "error" ? STATE_COLOR.failed
       : v.runStatus === "halted" ? STATE_COLOR.halted
+      : v.runStatus === "cancelled" ? STATE_COLOR.cancelled
       : STATE_COLOR["not-started"])
     : STATE_COLOR["not-started"];
   status.appendChild(d);

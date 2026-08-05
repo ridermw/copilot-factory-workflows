@@ -30,6 +30,8 @@ import { renderHtml } from "./renderer.mjs";
 
 const COALESCE_MS = 100;
 const SAFETY_REFRESH_MS = 5000;
+/** Consecutive "run not found" reads tolerated before the safety poll gives up. */
+const MAX_MISSED_LOOKUPS = 3;
 const MAX_NODES = 250;
 
 /** instanceId -> instance record. Panels are ephemeral; this map may be so too. */
@@ -135,6 +137,9 @@ async function refreshNow(entry) {
         const detail = await session.factory.getRunDetail(entry.runId);
         entry.detail = detail ?? null;
         entry.runError = detail ? null : `Run ${entry.runId} was not found.`;
+        // Count only confirmed misses. A thrown read (the catch below) is a
+        // transient failure and stays retryable.
+        entry.misses = detail ? 0 : (entry.misses ?? 0) + 1;
     } catch (err) {
         // A failed read must not blank the graph -- keep the last good detail
         // and surface the failure in the panel instead.
@@ -173,7 +178,15 @@ function scheduleSafety(entry) {
     }
     const status = entry.detail?.status;
     // Wire statuses are: pending | running | completed | halted | cancelled | error.
-    const live = entry.runId && (status === "running" || status === "pending" || status == null);
+    // A null status means no detail has been read yet. Poll a few rounds for a
+    // run that is still materializing, then stop -- otherwise a runId that will
+    // never resolve polls every 5s for the life of the panel. If it does show up
+    // later, `factory.run_updated` still schedules a refresh.
+    const live =
+        entry.runId &&
+        (status === "running" ||
+            status === "pending" ||
+            (status == null && (entry.misses ?? 0) < MAX_MISSED_LOOKUPS));
     if (!live) return;
     entry.safety = setTimeout(() => {
         entry.safety = null;
@@ -287,6 +300,7 @@ const canvas = createCanvas({
                 safety: null,
                 inFlight: false,
                 repeat: false,
+                misses: 0,
             };
             // View must exist before the server can answer /state.
             entry.manifest = manifest;
@@ -315,6 +329,7 @@ const canvas = createCanvas({
             entry.runId = runId;
             entry.detail = null;
             entry.runError = null;
+            entry.misses = 0;
         }
 
         recompute(entry);
@@ -343,6 +358,7 @@ const canvas = createCanvas({
                 entry.runId = ctx.input.runId;
                 entry.detail = null;
                 entry.runError = null;
+                entry.misses = 0;
                 await writeAttachState(entry.manifest.factoryName, entry.runId);
                 await refreshNow(entry);
                 return {
@@ -362,6 +378,7 @@ const canvas = createCanvas({
                 entry.runId = null;
                 entry.detail = null;
                 entry.runError = null;
+                entry.misses = 0;
                 if (entry.safety) {
                     clearTimeout(entry.safety);
                     entry.safety = null;

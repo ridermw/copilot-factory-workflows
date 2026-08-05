@@ -128,8 +128,8 @@ wrong lights:
 | Manifest field | Must match |
 | --- | --- |
 | `factoryName` | `meta.name` exactly |
-| `phases[].title` | `meta.phases[].title` **exactly** |
-| `nodes[].label` | the `label` passed to `ctx.agent()` **exactly** |
+| `phases[].title` | `meta.phases[].title` (case-insensitive, whitespace-trimmed) |
+| `nodes[].label` | the `label` passed to `ctx.agent()` (case-insensitive, whitespace-trimmed) |
 
 Declared phases have **no id** — only a title. `phases[].id` is a manifest-local
 handle for `nodes[].phaseId`; correlation to the running factory happens on

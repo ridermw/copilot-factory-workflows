@@ -130,7 +130,12 @@ export default {
             name: "round 1 complete, round 2 under way",
             detail: {
                 status: "running",
-                phase: "ROUND 2",
+                phases: [
+                    { id: "r1", title: "ROUND 1", ordinal: 0, status: "completed" },
+                    { id: "r2", title: "ROUND 2", ordinal: 1, status: "active" },
+                    { id: "final", title: "FINAL", ordinal: 2, status: "pending" },
+                ],
+                currentPhase: "r2",
                 agents: [
                     { label: "merge:a", status: "succeeded" },
                     { label: "merge:b", status: "succeeded" },
@@ -142,6 +147,12 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "r2",
+                phaseStates: {
+                    "r1": "completed",
+                    "r2": "active",
+                    "final": "pending",
+                },
                 nodeStates: {
                     "merge-a": "succeeded",
                     "merge-b": "succeeded",
@@ -159,7 +170,12 @@ export default {
             name: "cancelled during the final merge",
             detail: {
                 status: "cancelled",
-                phase: "FINAL",
+                phases: [
+                    { id: "r1", title: "ROUND 1", ordinal: 0, status: "completed" },
+                    { id: "r2", title: "ROUND 2", ordinal: 1, status: "completed" },
+                    { id: "final", title: "FINAL", ordinal: 2, status: "active" },
+                ],
+                currentPhase: "final",
                 agents: [
                     { label: "merge:a", status: "succeeded" },
                     { label: "merge:b", status: "succeeded" },
@@ -172,6 +188,12 @@ export default {
             },
             expect: {
                 runStatus: "cancelled",
+                currentPhase: "final",
+                phaseStates: {
+                    "r1": "completed",
+                    "r2": "completed",
+                    "final": "active",
+                },
                 nodeStates: {
                     "merge-a": "succeeded",
                     "merge-b": "succeeded",

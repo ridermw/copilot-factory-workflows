@@ -1,15 +1,23 @@
 // Triaging at scale -- article run scenario 4 of 4.
 //
-//   +-- quarantine (no write access) ------------+   +-- trusted -------------+
+//   +-- quarantine (untrusted input) ------------+   +-- trusted -------------+
 //   |  read:0 --+                                |   |                        |
 //   |  read:1 --+--> dedupe --> summarize -------+-->|  triage --> fix        |
 //   |  read:2 --+                                |   |         \-> escalate   |
 //   +--------------------------------------------+   +------------------------+
 //
 // This is the container-groups fixture. The two boxes are the whole point of
-// the pattern: untrusted input is read by agents that cannot act, reduced to a
-// sanitized summary, and only that summary crosses into the zone where an
-// agent is allowed to change anything.
+// the pattern: untrusted input is read first, reduced to a sanitized summary,
+// and only that summary crosses into the zone where an agent acts on it.
+//
+// What the boxes are NOT: a capability boundary. The quarantined readers are
+// told not to follow instructions in the text they read, and a prompt
+// instruction is not a sandbox -- an injected report can still try to steer a
+// reader, and `agent()` here constrains only `label` and `schema`. The grouping
+// buys one real thing: acting agents never see raw report text, only the
+// reduced summary, which shrinks what an injection can reach. If you need an
+// actual boundary, restrict the readers' tools at spawn time; treat this
+// fixture as the data-flow shape, not as the enforcement.
 //
 // The `quarantine` group deliberately spans two phases (Read and Reduce), so
 // this is also the fixture that proves group boxes are not just another name
@@ -67,8 +75,9 @@ export default {
             required: ["action"],
         };
 
-        // Quarantine. These agents only describe what they read -- they are
-        // never given an instruction that could act on it.
+        // Quarantine. These readers are asked to describe rather than act, and
+        // their output is treated as data downstream. That is a data-flow
+        // convention, not an enforced capability boundary -- see the header.
         phase("Read");
         const read = await parallel(
             reports.map(
@@ -130,7 +139,7 @@ export default {
             { id: "act", title: "Act" },
         ],
         groups: [
-            { id: "quarantine", title: "quarantine", detail: "reads only, cannot act" },
+            { id: "quarantine", title: "quarantine", detail: "untrusted input" },
             { id: "trusted", title: "trusted", detail: "sees the summary only" },
         ],
         nodes: [
@@ -180,7 +189,12 @@ export default {
             name: "still inside quarantine",
             detail: {
                 status: "running",
-                phase: "Read",
+                phases: [
+                    { id: "read", title: "Read", ordinal: 0, status: "active" },
+                    { id: "reduce", title: "Reduce", ordinal: 1, status: "pending" },
+                    { id: "act", title: "Act", ordinal: 2, status: "pending" },
+                ],
+                currentPhase: "read",
                 agents: [
                     { label: "read:0", status: "succeeded" },
                     { label: "read:1", status: "running" },
@@ -189,6 +203,12 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "read",
+                phaseStates: {
+                    "read": "active",
+                    "reduce": "pending",
+                    "act": "pending",
+                },
                 nodeStates: {
                     "read-0": "succeeded",
                     "read-1": "running",
@@ -206,7 +226,12 @@ export default {
             name: "fixable route taken, escalate stays dark",
             detail: {
                 status: "succeeded",
-                phase: "Act",
+                phases: [
+                    { id: "read", title: "Read", ordinal: 0, status: "completed" },
+                    { id: "reduce", title: "Reduce", ordinal: 1, status: "completed" },
+                    { id: "act", title: "Act", ordinal: 2, status: "completed" },
+                ],
+                currentPhase: "act",
                 agents: [
                     { label: "read:0", status: "succeeded" },
                     { label: "read:1", status: "succeeded" },
@@ -219,6 +244,12 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "act",
+                phaseStates: {
+                    "read": "completed",
+                    "reduce": "completed",
+                    "act": "completed",
+                },
                 nodeStates: {
                     "read-0": "succeeded",
                     "read-1": "succeeded",
@@ -236,7 +267,12 @@ export default {
             name: "summarize fails, so nothing crosses the boundary",
             detail: {
                 status: "failed",
-                phase: "Reduce",
+                phases: [
+                    { id: "read", title: "Read", ordinal: 0, status: "completed" },
+                    { id: "reduce", title: "Reduce", ordinal: 1, status: "active" },
+                    { id: "act", title: "Act", ordinal: 2, status: "pending" },
+                ],
+                currentPhase: "reduce",
                 agents: [
                     { label: "read:0", status: "succeeded" },
                     { label: "read:1", status: "succeeded" },
@@ -247,6 +283,12 @@ export default {
             },
             expect: {
                 runStatus: "failed",
+                currentPhase: "reduce",
+                phaseStates: {
+                    "read": "completed",
+                    "reduce": "active",
+                    "act": "pending",
+                },
                 nodeStates: {
                     "read-0": "succeeded",
                     "read-1": "succeeded",

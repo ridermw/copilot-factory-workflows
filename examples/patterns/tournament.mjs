@@ -144,7 +144,12 @@ export default {
             name: "semifinals in flight, final not reached",
             detail: {
                 status: "running",
-                phase: "Semifinal",
+                phases: [
+                    { id: "attempt", title: "Attempt", ordinal: 0, status: "completed" },
+                    { id: "semi", title: "Semifinal", ordinal: 1, status: "active" },
+                    { id: "final", title: "Final", ordinal: 2, status: "pending" },
+                ],
+                currentPhase: "semi",
                 agents: [
                     { label: "attempt:0", status: "succeeded" },
                     { label: "attempt:1", status: "succeeded" },
@@ -156,6 +161,12 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "semi",
+                phaseStates: {
+                    "attempt": "completed",
+                    "semi": "active",
+                    "final": "pending",
+                },
                 nodeStates: {
                     "attempt-0": "succeeded",
                     "attempt-1": "succeeded",
@@ -173,7 +184,12 @@ export default {
             name: "one entrant never drafts; its bracket still resolves",
             detail: {
                 status: "succeeded",
-                phase: "Final",
+                phases: [
+                    { id: "attempt", title: "Attempt", ordinal: 0, status: "completed" },
+                    { id: "semi", title: "Semifinal", ordinal: 1, status: "completed" },
+                    { id: "final", title: "Final", ordinal: 2, status: "completed" },
+                ],
+                currentPhase: "final",
                 agents: [
                     { label: "attempt:0", status: "succeeded" },
                     { label: "attempt:1", status: "succeeded" },
@@ -185,6 +201,12 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "final",
+                phaseStates: {
+                    "attempt": "completed",
+                    "semi": "completed",
+                    "final": "completed",
+                },
                 nodeStates: {
                     "attempt-0": "succeeded",
                     "attempt-1": "succeeded",

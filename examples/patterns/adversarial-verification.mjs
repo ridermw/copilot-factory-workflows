@@ -115,7 +115,11 @@ export default {
             name: "all three verifiers attacking at once",
             detail: {
                 status: "running",
-                phase: "Verify",
+                phases: [
+                    { id: "produce", title: "Produce", ordinal: 0, status: "completed" },
+                    { id: "verify", title: "Verify", ordinal: 1, status: "active" },
+                ],
+                currentPhase: "verify",
                 agents: [
                     { label: "produce", status: "succeeded" },
                     { label: "verify:0", status: "running" },
@@ -125,6 +129,11 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "verify",
+                phaseStates: {
+                    "produce": "completed",
+                    "verify": "active",
+                },
                 nodeStates: {
                     produce: "succeeded",
                     "verify-0": "running",
@@ -138,7 +147,11 @@ export default {
             name: "claim survives two angles and is refuted by the third",
             detail: {
                 status: "succeeded",
-                phase: "Verify",
+                phases: [
+                    { id: "produce", title: "Produce", ordinal: 0, status: "completed" },
+                    { id: "verify", title: "Verify", ordinal: 1, status: "completed" },
+                ],
+                currentPhase: "verify",
                 agents: [
                     { label: "produce", status: "succeeded" },
                     { label: "verify:0", status: "succeeded" },
@@ -148,6 +161,11 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "verify",
+                phaseStates: {
+                    "produce": "completed",
+                    "verify": "completed",
+                },
                 nodeStates: {
                     produce: "succeeded",
                     "verify-0": "succeeded",

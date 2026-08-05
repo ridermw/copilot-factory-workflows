@@ -182,8 +182,29 @@ for (const { file, fixture: f } of loaded) {
 
 console.log("== harness: run bodies emit exactly the graph the manifest declares");
 
+// A factory `run` is shipped to the runtime as source text: `String(run)` is the
+// literal payload `factories_manage` takes. Calling the imported function object
+// directly would keep its module closure alive, so a body that referenced a
+// top-level import or helper would pass here and fail in production -- and the
+// regex guards cannot see it, because top-level imports never appear in
+// `String(f.run)`. Rehydrating through `new Function` reproduces the runtime's
+// scope exactly: anything not defined inside the body is a ReferenceError.
+function rehydrate(fn) {
+    return new Function(`"use strict"; return (${String(fn)});`)();
+}
+
 for (const { file, fixture: f } of loaded) {
     const at = (what) => `${file}: ${what}`;
+
+    let run = null;
+    let rehydrateError = null;
+    try {
+        run = rehydrate(f.run);
+    } catch (err) {
+        rehydrateError = err?.message ?? String(err);
+    }
+    check(at("run survives serialization"), rehydrateError === null, { rehydrateError });
+    if (!run) continue;
 
     const declaredLabels = (f.manifest?.nodes ?? [])
         .filter((n) => n.kind !== "terminal")
@@ -198,7 +219,7 @@ for (const { file, fixture: f } of loaded) {
     for (const pick of [0, 1, 2]) {
         const h = makeCtx(f.harnessArgs, pick);
         try {
-            await f.run(h.ctx);
+            await run(h.ctx);
         } catch (err) {
             threw = threw ?? `pick=${pick}: ${err?.message ?? err}`;
         }
@@ -240,7 +261,7 @@ for (const { file, fixture: f } of loaded) {
     const h = makeCtx({}, 0);
     let rejected = false;
     try {
-        await f.run(h.ctx);
+        await rehydrate(f.run)(h.ctx);
     } catch {
         rejected = true;
     }

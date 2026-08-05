@@ -158,7 +158,11 @@ export default {
             name: "five verifiers, five different outcomes at once",
             detail: {
                 status: "running",
-                phase: "Verify",
+                phases: [
+                    { id: "verify", title: "Verify", ordinal: 0, status: "active" },
+                    { id: "confirm", title: "Confirm", ordinal: 1, status: "pending" },
+                ],
+                currentPhase: "verify",
                 agents: [
                     { label: "rule:0", status: "succeeded" },
                     { label: "rule:1", status: "running" },
@@ -169,6 +173,11 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "verify",
+                phaseStates: {
+                    "verify": "active",
+                    "confirm": "pending",
+                },
                 nodeStates: {
                     "rule-0": "succeeded",
                     "rule-1": "running",
@@ -185,7 +194,11 @@ export default {
             name: "nothing flagged, so the skeptic is never consulted",
             detail: {
                 status: "succeeded",
-                phase: "Verify",
+                phases: [
+                    { id: "verify", title: "Verify", ordinal: 0, status: "completed" },
+                    { id: "confirm", title: "Confirm", ordinal: 1, status: "pending" },
+                ],
+                currentPhase: "verify",
                 agents: [
                     { label: "rule:0", status: "succeeded" },
                     { label: "rule:1", status: "succeeded" },
@@ -196,6 +209,11 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "verify",
+                phaseStates: {
+                    "verify": "completed",
+                    "confirm": "pending",
+                },
                 nodeStates: {
                     "rule-0": "succeeded",
                     "rule-1": "succeeded",
@@ -212,7 +230,11 @@ export default {
             name: "a sixth rule appears at runtime and is surfaced, not dropped",
             detail: {
                 status: "running",
-                phase: "Verify",
+                phases: [
+                    { id: "verify", title: "Verify", ordinal: 0, status: "active" },
+                    { id: "confirm", title: "Confirm", ordinal: 1, status: "pending" },
+                ],
+                currentPhase: "verify",
                 agents: [
                     { label: "rule:0", status: "succeeded" },
                     { label: "rule:1", status: "succeeded" },
@@ -227,12 +249,21 @@ export default {
             // quietly hide live work.
             expect: {
                 runStatus: "running",
+                currentPhase: "verify",
+                phaseStates: {
+                    "verify": "active",
+                    "confirm": "pending",
+                },
                 nodeStates: {
                     "rule-0": "succeeded",
                     "rule-1": "succeeded",
                     "rule-2": "succeeded",
                     "rule-3": "succeeded",
                     "rule-4": "succeeded",
+                    // Still in Verify, so the Confirm-phase reviewer has not
+                    // started and its artifact does not exist yet.
+                    skeptic: "not-started",
+                    violations: "not-started",
                 },
                 unmapped: 1,
             },

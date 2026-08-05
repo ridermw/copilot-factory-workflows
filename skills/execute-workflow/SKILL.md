@@ -167,9 +167,11 @@ turning the run's result into the answer, edit, or file they actually wanted.
 
 ## What the states look like
 
-[`examples/runs/`](../../examples/runs/) holds four workflows with real run state
-projected onto them, so you can check a live graph against a known-good one
-before calling it broken:
+[`examples/runs/`](../../examples/runs/) holds four workflows with **synthetic**
+run state projected onto them — representative examples to compare a live graph
+against, not captured wire data. The `FactoryRunDetail` in each is hand-written
+(see `examples/README.md`), so treat them as illustrations of what each state
+looks like, not as an oracle for what the runtime emits:
 
 | Fixture | What it shows |
 | --- | --- |

@@ -153,7 +153,12 @@ export default {
             name: "checkers fanned out, auditor not yet needed",
             detail: {
                 status: "running",
-                phase: "Check",
+                phases: [
+                    { id: "extract", title: "Extract", ordinal: 0, status: "completed" },
+                    { id: "check", title: "Check", ordinal: 1, status: "active" },
+                    { id: "report", title: "Report", ordinal: 2, status: "pending" },
+                ],
+                currentPhase: "check",
                 agents: [
                     { label: "extract", status: "succeeded" },
                     { label: "check:0", status: "succeeded" },
@@ -163,6 +168,12 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "check",
+                phaseStates: {
+                    "extract": "completed",
+                    "check": "active",
+                    "report": "pending",
+                },
                 nodeStates: {
                     extract: "succeeded",
                     "check-0": "succeeded",
@@ -178,7 +189,12 @@ export default {
             name: "everything settled, so the conditional auditor never runs",
             detail: {
                 status: "succeeded",
-                phase: "Report",
+                phases: [
+                    { id: "extract", title: "Extract", ordinal: 0, status: "completed" },
+                    { id: "check", title: "Check", ordinal: 1, status: "completed" },
+                    { id: "report", title: "Report", ordinal: 2, status: "completed" },
+                ],
+                currentPhase: "report",
                 agents: [
                     { label: "extract", status: "succeeded" },
                     { label: "check:0", status: "succeeded" },
@@ -189,6 +205,12 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "report",
+                phaseStates: {
+                    "extract": "completed",
+                    "check": "completed",
+                    "report": "completed",
+                },
                 nodeStates: {
                     extract: "succeeded",
                     "check-0": "succeeded",
@@ -204,7 +226,12 @@ export default {
             name: "an uncertain claim pulls the auditor in",
             detail: {
                 status: "succeeded",
-                phase: "Report",
+                phases: [
+                    { id: "extract", title: "Extract", ordinal: 0, status: "completed" },
+                    { id: "check", title: "Check", ordinal: 1, status: "completed" },
+                    { id: "report", title: "Report", ordinal: 2, status: "completed" },
+                ],
+                currentPhase: "report",
                 agents: [
                     { label: "extract", status: "succeeded" },
                     { label: "check:0", status: "succeeded" },
@@ -216,6 +243,12 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "report",
+                phaseStates: {
+                    "extract": "completed",
+                    "check": "completed",
+                    "report": "completed",
+                },
                 nodeStates: {
                     extract: "succeeded",
                     "check-0": "succeeded",

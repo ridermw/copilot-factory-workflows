@@ -105,7 +105,11 @@ export default {
             name: "fan-out in flight, barrier still waiting",
             detail: {
                 status: "running",
-                phase: "Scan",
+                phases: [
+                    { id: "scan", title: "Scan", ordinal: 0, status: "active" },
+                    { id: "synth", title: "Synthesize", ordinal: 1, status: "pending" },
+                ],
+                currentPhase: "scan",
                 agents: [
                     { label: "scan:docs", status: "succeeded" },
                     { label: "scan:tests", status: "succeeded" },
@@ -115,6 +119,11 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "scan",
+                phaseStates: {
+                    "scan": "active",
+                    "synth": "pending",
+                },
                 nodeStates: {
                     "scan-docs": "succeeded",
                     "scan-tests": "succeeded",
@@ -129,7 +138,11 @@ export default {
             name: "one scan fails, the barrier still runs on what survived",
             detail: {
                 status: "succeeded",
-                phase: "Synthesize",
+                phases: [
+                    { id: "scan", title: "Scan", ordinal: 0, status: "completed" },
+                    { id: "synth", title: "Synthesize", ordinal: 1, status: "completed" },
+                ],
+                currentPhase: "synth",
                 agents: [
                     { label: "scan:docs", status: "succeeded" },
                     { label: "scan:tests", status: "error" },
@@ -140,6 +153,11 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "synth",
+                phaseStates: {
+                    "scan": "completed",
+                    "synth": "completed",
+                },
                 nodeStates: {
                     "scan-docs": "succeeded",
                     "scan-tests": "failed",

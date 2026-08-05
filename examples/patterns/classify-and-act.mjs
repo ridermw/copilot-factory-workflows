@@ -97,7 +97,11 @@ export default {
             name: "one branch taken, the rest stay grey",
             detail: {
                 status: "succeeded",
-                phase: "Act",
+                phases: [
+                    { id: "classify", title: "Classify", ordinal: 0, status: "completed" },
+                    { id: "act", title: "Act", ordinal: 1, status: "completed" },
+                ],
+                currentPhase: "act",
                 agents: [
                     { label: "classify", status: "succeeded" },
                     { label: "act:feature", status: "succeeded" },
@@ -105,6 +109,11 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "act",
+                phaseStates: {
+                    "classify": "completed",
+                    "act": "completed",
+                },
                 nodeStates: {
                     classify: "succeeded",
                     "act-bug": "not-started",
@@ -118,11 +127,20 @@ export default {
             name: "classifier fails before any branch is chosen",
             detail: {
                 status: "failed",
-                phase: "Classify",
+                phases: [
+                    { id: "classify", title: "Classify", ordinal: 0, status: "active" },
+                    { id: "act", title: "Act", ordinal: 1, status: "pending" },
+                ],
+                currentPhase: "classify",
                 agents: [{ label: "classify", status: "error" }],
             },
             expect: {
                 runStatus: "failed",
+                currentPhase: "classify",
+                phaseStates: {
+                    "classify": "active",
+                    "act": "pending",
+                },
                 nodeStates: {
                     classify: "failed",
                     "act-bug": "not-started",

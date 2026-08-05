@@ -116,7 +116,11 @@ export default {
             name: "filter running, artifacts still unwritten",
             detail: {
                 status: "running",
-                phase: "Filter",
+                phases: [
+                    { id: "generate", title: "Generate", ordinal: 0, status: "completed" },
+                    { id: "filter", title: "Filter", ordinal: 1, status: "active" },
+                ],
+                currentPhase: "filter",
                 agents: [
                     { label: "gen:0", status: "succeeded" },
                     { label: "gen:1", status: "succeeded" },
@@ -126,6 +130,11 @@ export default {
             },
             expect: {
                 runStatus: "running",
+                currentPhase: "filter",
+                phaseStates: {
+                    "generate": "completed",
+                    "filter": "active",
+                },
                 nodeStates: {
                     "gen-0": "succeeded",
                     "gen-1": "succeeded",
@@ -141,7 +150,11 @@ export default {
             name: "run completes; artifact nodes are still never-run by design",
             detail: {
                 status: "succeeded",
-                phase: "Filter",
+                phases: [
+                    { id: "generate", title: "Generate", ordinal: 0, status: "completed" },
+                    { id: "filter", title: "Filter", ordinal: 1, status: "completed" },
+                ],
+                currentPhase: "filter",
                 agents: [
                     { label: "gen:0", status: "succeeded" },
                     { label: "gen:1", status: "succeeded" },
@@ -151,6 +164,11 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "filter",
+                phaseStates: {
+                    "generate": "completed",
+                    "filter": "completed",
+                },
                 nodeStates: {
                     "gen-0": "succeeded",
                     "gen-1": "succeeded",

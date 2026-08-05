@@ -387,9 +387,29 @@ check("edge label: backward uses the bowed midpoint", backX === 482.25, backX);
 check("edge label: backward clears the target node", backX > 210, backX);
 check("edge label: backward is not the endpoint average", backX !== 246, backX);
 // Truncation: the schema allows 120 chars, far wider than a 210px column.
-const longLabel = labels.find((l) => l.textContent.startsWith("this label"));
-check("edge label: long label truncated", longLabel.textContent.length === 28, longLabel.textContent);
-check("edge label: truncation is marked with an ellipsis", longLabel.textContent.endsWith("\u2026"), longLabel.textContent);
+// Assert on ownText, not textContent -- the label now carries an SVG <title>
+// child holding the untruncated value, which contributes to textContent but is
+// never painted.
+const longLabel = labels.find((l) => l.ownText.startsWith("this label"));
+check("edge label: long label truncated", longLabel.ownText.length === 28, longLabel.ownText);
+check(
+    "edge label: truncation is marked with an ellipsis",
+    longLabel.ownText.endsWith("\u2026"),
+    longLabel.ownText
+);
+// Truncation must not destroy information: the full branch condition has to
+// remain recoverable via the accessible name and the hover tooltip.
+const longTitle = longLabel.children.find((c) => c.tagName === "TITLE");
+check(
+    "edge label: full text preserved in a <title>",
+    longTitle?.textContent === "this label is far too long to fit inside one column",
+    longTitle?.textContent
+);
+check(
+    "edge label: full text preserved as an accessible name",
+    longLabel.getAttribute("aria-label") === "this label is far too long to fit inside one column",
+    longLabel.getAttribute("aria-label")
+);
 
 // -- container groups
 check("group: one box per group", rg.countByClass("group-box") === 2, rg.countByClass("group-box"));

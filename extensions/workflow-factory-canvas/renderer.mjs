@@ -144,7 +144,10 @@ main { flex: 1 1 auto; overflow: auto; position: relative; padding: 16px; }
   border: 1px solid var(--border-color-default, #d1d9e0);
   border-radius: 12px;
   background: var(--background-color-muted, rgba(101,109,118,.06));
-  pointer-events: none;
+  /* The box carries the group's detail as its title, so it has to be
+     hoverable. Member nodes sit at z-index 1 and still receive their own
+     events; only the bare backdrop between them resolves to the group. */
+  pointer-events: auto;
 }
 .group-label {
   position: absolute; z-index: 0;
@@ -166,6 +169,11 @@ text.edge-label {
   stroke: var(--background-color-default, #fff);
   stroke-width: 3px;
   stroke-linejoin: round;
+  /* #edges disables pointer events wholesale so the SVG never blocks the
+     nodes beneath it. Re-enable them just for the label, otherwise its
+     <title> -- the only place the untruncated branch text survives -- can
+     never be surfaced. */
+  pointer-events: auto;
 }
 text.edge-label.active { fill: var(--true-color-blue, #0969da); }
 
@@ -229,7 +237,8 @@ function nodeHeight(n) {
 
 // Edge labels are capped at 120 chars by the schema, which is far wider than a
 // column at 11px. Truncate for display so a long label cannot smear across the
-// whole graph; the full text stays available in the path's tooltip.
+// whole graph; the full text is attached to the label element as a <title> and
+// an aria-label, so truncation never destroys information.
 var MAX_EDGE_LABEL = 28;
 function edgeLabelText(s) {
   s = String(s);
@@ -556,6 +565,13 @@ function renderGraph(v) {
       lab.setAttribute("text-anchor", "middle");
       lab.setAttribute("class", "edge-label" + (edge.active ? " active" : ""));
       lab.textContent = edgeLabelText(edge.label);
+      // Display text may be truncated, so carry the full branch condition as
+      // the element's accessible name. Without this the omitted characters are
+      // unrecoverable for everyone, not just screen-reader users.
+      lab.setAttribute("aria-label", String(edge.label));
+      var lt = document.createElementNS(svgNS, "title");
+      lt.textContent = String(edge.label);
+      lab.appendChild(lt);
       svg.appendChild(lab);
     }
   }

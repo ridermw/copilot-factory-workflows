@@ -64,8 +64,17 @@ class Node {
     dispatch(t, ev) {
         for (const fn of this._listeners[t] ?? []) fn(ev);
     }
+    // Real DOM keeps the text set via textContent as a child text node, so a
+    // later appendChild (e.g. an SVG <title>) concatenates rather than
+    // replaces. Model that, otherwise an element's own text silently vanishes
+    // the moment anything is appended to it.
     get textContent() {
-        if (this.children.length) return this.children.map((c) => c.textContent).join("");
+        return this._text + this.children.map((c) => c.textContent).join("");
+    }
+    // The element's own text, excluding appended children. This is the part
+    // that actually paints -- an SVG <title> child contributes to textContent
+    // but is never rendered.
+    get ownText() {
         return this._text;
     }
     set textContent(v) {

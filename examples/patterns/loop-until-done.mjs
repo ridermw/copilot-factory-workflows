@@ -129,7 +129,11 @@ export default {
             name: "mid-loop: an earlier round finished, the next sweep is running",
             detail: {
                 status: "running",
-                phase: "Sweep",
+                phases: [
+                    { id: "sweep", title: "Sweep", ordinal: 0, status: "active" },
+                    { id: "decide", title: "Decide", ordinal: 1, status: "pending" },
+                ],
+                currentPhase: "sweep",
                 agents: [
                     { label: "sweep", status: "succeeded" },
                     { label: "gate", status: "succeeded" },
@@ -141,6 +145,11 @@ export default {
             // finished one -- which is what a loop should look like.
             expect: {
                 runStatus: "running",
+                currentPhase: "sweep",
+                phaseStates: {
+                    "sweep": "active",
+                    "decide": "pending",
+                },
                 nodeStates: { sweep: "running", gate: "succeeded", done: "not-started" },
                 unmapped: 0,
             },
@@ -149,7 +158,11 @@ export default {
             name: "gate says stop; loop exits cleanly",
             detail: {
                 status: "succeeded",
-                phase: "Decide",
+                phases: [
+                    { id: "sweep", title: "Sweep", ordinal: 0, status: "completed" },
+                    { id: "decide", title: "Decide", ordinal: 1, status: "completed" },
+                ],
+                currentPhase: "decide",
                 agents: [
                     { label: "sweep", status: "succeeded" },
                     { label: "gate", status: "succeeded" },
@@ -157,6 +170,11 @@ export default {
             },
             expect: {
                 runStatus: "succeeded",
+                currentPhase: "decide",
+                phaseStates: {
+                    "sweep": "completed",
+                    "decide": "completed",
+                },
                 nodeStates: { sweep: "succeeded", gate: "succeeded", done: "not-started" },
                 unmapped: 0,
             },
@@ -165,7 +183,11 @@ export default {
             name: "loop runs out of budget mid-sweep",
             detail: {
                 status: "halted",
-                phase: "Sweep",
+                phases: [
+                    { id: "sweep", title: "Sweep", ordinal: 0, status: "active" },
+                    { id: "decide", title: "Decide", ordinal: 1, status: "skipped" },
+                ],
+                currentPhase: "sweep",
                 agents: [
                     { label: "sweep", status: "succeeded" },
                     { label: "gate", status: "succeeded" },
@@ -174,6 +196,11 @@ export default {
             },
             expect: {
                 runStatus: "halted",
+                currentPhase: "sweep",
+                phaseStates: {
+                    "sweep": "active",
+                    "decide": "skipped",
+                },
                 nodeStates: { sweep: "halted", gate: "succeeded", done: "not-started" },
                 unmapped: 0,
             },

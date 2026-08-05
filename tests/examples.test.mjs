@@ -190,6 +190,43 @@ for (const { file, fixture: f } of loaded) {
         });
 
         const byId = new Map(view.nodes.map((n) => [n.id, n]));
+
+        // Phase projection. Before this was asserted, every scenario carried a
+        // `detail.phase` scalar that projectRun never reads -- so all ten
+        // fixtures rendered every phase header as pending and the suite passed
+        // regardless. Pinning the projected status is what makes the wire shape
+        // load-bearing instead of decorative.
+        const phaseById = new Map(view.phases.map((p) => [p.id, p]));
+        for (const [phaseId, want] of Object.entries(sc.expect.phaseStates ?? {})) {
+            const got = phaseById.get(phaseId);
+            check(`${at}: phase ${phaseId} is ${want}`, got?.status === want, {
+                got: got?.status ?? "(phase missing)",
+                want,
+            });
+        }
+        check(
+            `${at}: every declared phase has an expectation`,
+            Object.keys(sc.expect.phaseStates ?? {}).length === view.phases.length,
+            {
+                expected: Object.keys(sc.expect.phaseStates ?? {}),
+                projected: view.phases.map((p) => p.id),
+            }
+        );
+        check(`${at}: currentPhase`, view.currentPhase === sc.expect.currentPhase, {
+            got: view.currentPhase,
+            want: sc.expect.currentPhase,
+        });
+
+        // An expectation map that only covers some nodes lets a regression in
+        // an unlisted node pass silently, which would make "exact per-node
+        // state" a false claim. Require full coverage.
+        const declaredIds = manifest.nodes.map((n) => n.id);
+        const expectedIds = Object.keys(sc.expect.nodeStates ?? {});
+        const uncovered = declaredIds.filter((id) => !expectedIds.includes(id));
+        check(`${at}: every declared node has a state expectation`, uncovered.length === 0, {
+            uncovered,
+        });
+
         for (const [nodeId, want] of Object.entries(sc.expect.nodeStates ?? {})) {
             const got = byId.get(nodeId);
             check(`${at}: ${nodeId} is ${want}`, got?.state === want, {
@@ -220,7 +257,15 @@ for (const { file, fixture: f } of loaded) {
 
 console.log("\n== corpus: article coverage is complete and accounted for");
 
-check("corpus has 24 unique items", CORPUS.length === 24, { found: CORPUS.length });
+check("corpus has 24 items", CORPUS.length === 24, { found: CORPUS.length });
+
+// Length alone would let a duplicate id stand in for an omitted article item,
+// which is exactly the gap the coverage index exists to close.
+const corpusIds = new Set(CORPUS.map((i) => i.id));
+check("corpus ids are unique", corpusIds.size === CORPUS.length, {
+    ids: corpusIds.size,
+    items: CORPUS.length,
+});
 
 const fixtureIds = new Set(loaded.map((l) => l.fixture.id));
 const referenced = new Set();

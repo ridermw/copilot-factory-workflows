@@ -1,7 +1,7 @@
 # Loop Engineering — presentation
 
 A self-contained HTML presenter deck on loop engineering, built for an Azure HPC
-department briefing. 23 slides, about 20 minutes.
+department briefing. 25 slides, about 20 minutes.
 
 **Live:** https://ridermw.github.io/copilot-factory-workflows/presentation/
 
@@ -43,16 +43,33 @@ accounting of what it costs you when you skip them.
 The deck argues that verification should be mechanical rather than assumed, so it was
 verified the same way:
 
-- **620 text/background contrast pairs measured** in both themes against composited
-  backgrounds. Zero failures at WCAG 2.1 AA.
+- **734 text/background contrast pairs measured** in both themes against composited
+  backgrounds, including SVG diagram text. Zero failures at WCAG 2.1 AA.
 - **Zero slide overflow** at 1440&times;810, 768&times;1024 and 390&times;844, in both themes.
-- **23 print pages**, light palette forced.
+- **25 print pages**, light palette forced.
 - Every slide carries a real heading element; controls are keyboard-reachable.
 
-One measured fix was applied on top of the inherited stylesheet: `--cp-text-muted`
-(#919191) lands at 3.53:1 on the dark background and 4.31:1 on the soft surface, both
-under the 4.5:1 floor for normal-size text. Those three rules now use `--cp-text-soft`
-(#b0b0b0), which measures 5.05:1 and preserves the muted hierarchy.
+Two measured fixes were applied. `--cp-text-muted` (#919191) lands at 3.53:1 on the
+dark background and 4.31:1 on the soft surface, both under the 4.5:1 floor for
+normal-size text; `p.lede`, `ul.bullets li` and `table.tbl th` now use
+`--cp-text-soft` (#b0b0b0) at 5.05:1. The same token failed again inside the SVG
+diagrams and was corrected there too.
+
+Diagrams are **inline SVG** built from the same tone tokens as the rest of the deck:
+surface fill, 1.5px tone border, tone tab. A tinted fill behind muted text is the
+recurring contrast defect this design system already paid for, so it is avoided.
+Marker ids are unique per diagram — several SVGs share one document, and duplicated
+ids silently drop every arrowhead after the first.
+
+## Call to action
+
+The closing slides use only **vanilla GitHub Copilot CLI** — nothing installed beyond
+the CLI, no skills, no plugins, no MCP servers past the built-in one. Every command is
+taken from the official docs:
+
+- [Running GitHub Copilot CLI programmatically](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/run-cli-programmatically)
+- [Automating tasks with Copilot CLI and GitHub Actions](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/automate-with-actions)
+- [Scheduling prompts in GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/schedule-prompts)
 
 ## Credits
 
